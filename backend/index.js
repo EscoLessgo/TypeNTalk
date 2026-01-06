@@ -13,7 +13,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const FRONTEND_PATH = path.join(process.cwd(), 'frontend/dist');
+const FRONTEND_PATH = path.join(__dirname, '../frontend/dist');
 const FRONTEND_INDEX = path.join(FRONTEND_PATH, 'index.html');
 
 // Serve static files from the frontend build

@@ -2,7 +2,7 @@
   "name": "lovense-sync",
   "version": "1.0.0",
   "scripts": {
-    "start": "cd backend && node index.js",
+    "start": "node backend/index.js",
     "build": "cd frontend && npm install && npm run build && cd ../backend && npm install && npx prisma generate && npx prisma db push --accept-data-loss",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev:backend": "cd backend && npm run dev",
