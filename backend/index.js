@@ -81,7 +81,13 @@ app.get('/api/lovense/qr', async (req, res) => {
         }
     } catch (error) {
         console.error('Error getting QR:', error.message);
-        res.status(500).json({ error: 'Failed to get QR code' });
+        if (error.response) {
+            console.error('Lovense API Response Error:', error.response.data);
+        }
+        res.status(500).json({
+            error: 'Failed to get QR code from Lovense',
+            details: error.response?.data || error.message
+        });
     }
 });
 

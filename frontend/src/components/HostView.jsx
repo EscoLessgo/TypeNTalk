@@ -91,8 +91,15 @@ export default function HostView() {
             }
         } catch (err) {
             console.error('Start session error:', err);
-            const msg = err.response?.data?.error || err.message || 'System error. Check your connection.';
-            setError(msg);
+            const errorData = err.response?.data;
+            if (errorData && errorData.error) {
+                setError({
+                    message: errorData.error,
+                    details: errorData.details
+                });
+            } else {
+                setError(err.message || 'System error. Check your connection.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -166,9 +173,14 @@ export default function HostView() {
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center"
+                                className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-2"
                             >
-                                {error}
+                                <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
+                                {error.details && (
+                                    <p className="text-[10px] opacity-50 lowercase font-mono">
+                                        {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
+                                    </p>
+                                )}
                             </motion.div>
                         )}
                     </div>
