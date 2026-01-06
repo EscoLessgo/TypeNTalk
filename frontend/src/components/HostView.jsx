@@ -8,8 +8,9 @@ import { v4 as uuidv4 } from 'uuid';
 const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 export default function HostView() {
-    const [status, setStatus] = useState('idle'); // idle, qr, connected
+    const [status, setStatus] = useState('idle');
     const [qrCode, setQrCode] = useState('');
+    const [pairingCode, setPairingCode] = useState('');
     const [username, setUsername] = useState('');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
@@ -47,6 +48,7 @@ export default function HostView() {
             const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uid}`);
             if (res.data && res.data.qr) {
                 setQrCode(res.data.qr);
+                setPairingCode(res.data.code);
                 setStatus('qr');
                 setError(null);
             } else {
@@ -119,6 +121,12 @@ export default function HostView() {
                         <img src={qrCode} alt="Lovense Pairing QR" className="w-[280px] h-[280px] object-contain" />
                     </div>
                     <div className="text-center space-y-3">
+                        {pairingCode && (
+                            <div className="inline-block px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl mb-2">
+                                <p className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Pairing Code</p>
+                                <p className="text-2xl font-mono font-black text-white">{pairingCode}</p>
+                            </div>
+                        )}
                         <div className="flex items-center justify-center gap-2 text-purple-400">
                             <span className="relative flex h-3 w-3">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
