@@ -207,18 +207,57 @@ io.on('connection', (socket) => {
 
 async function sendCommand(uid, command, strength, duration) {
     try {
-        const payload = {
-            token: process.env.LOVENSE_DEVELOPER_TOKEN,
-            uid: uid,
-            command: command,
-            strength: Math.min(strength, 20),
-            timeSec: duration,
-            apiVer: 1
-        };
-        await axios.post(LOVENSE_URL, payload);
+        const host = await prisma.host.findUnique({ where: { uid } });
+        if (!host || !host.toys) {
+            // Fallback to generic vibrate if no toy info stored
+            return await dispatchRaw(uid, 'vibrate', strength, duration);
+        }
+
+        const toyList = host.toys; // This is a Record<id, toyDetails>
+        const commands = [];
+
+        for (const [tId, toy] of Object.entries(toyList)) {
+            const name = (toy.name || '').toLowerCase();
+            const type = (toy.type || '').toLowerCase();
+
+            // Default: Most toys support 'vibrate'
+            commands.push(dispatchRaw(uid, 'vibrate', strength, duration));
+
+            // Specialized Actions
+            if (name.includes('nora') || type === 'nora') {
+                // Nora supports rotation. For pulses, we can add a quick rotation.
+                commands.push(dispatchRaw(uid, 'rotate', Math.ceil(strength / 2), duration));
+            }
+
+            if (name.includes('max') || type === 'max') {
+                // Max is suction/pumping. 
+                // Pumping strength is 0-3 in some APIs, but Standard API often maps 0-20.
+                commands.push(dispatchRaw(uid, 'pump', strength, duration));
+            }
+
+            if (name.includes('edge') || type === 'edge') {
+                // Edge has dual motors, vibrate usually hits both.
+            }
+        }
+
+        await Promise.all(commands);
     } catch (error) {
-        console.error('Error sending command:', error.message);
+        console.error('Error in intelligent command mapping:', error.message);
     }
+}
+
+async function dispatchRaw(uid, command, strength, duration) {
+    const payload = {
+        token: process.env.LOVENSE_DEVELOPER_TOKEN,
+        uid: uid,
+        command: command,
+        strength: Math.min(strength, 20),
+        timeSec: duration,
+        apiVer: 1
+    };
+    return axios.post(LOVENSE_URL, payload).catch(e => {
+        console.error(`Fetch failed for ${command}:`, e.message);
+    });
 }
 
 server.listen(PORT, () => {
