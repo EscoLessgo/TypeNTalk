@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 export default function HostView() {
     const [status, setStatus] = useState('idle'); // idle, qr, connected
-    const [qrCode, setQrCode] = useState(''); // Renamed from qrData
+    const [qrCode, setQrCode] = useState('');
     const [username, setUsername] = useState('');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
@@ -100,10 +100,10 @@ export default function HostView() {
                 <p className="text-white/60">Pair your toy and invite a typist.</p>
             </header>
 
-            {status === 'qr' && qrData && (
+            {status === 'qr' && qrCode && (
                 <div className="glass p-10 rounded-3xl flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500">
                     <div className="p-4 bg-white rounded-2xl shadow-2xl shadow-purple-500/20">
-                        <QRCodeSVG value={qrData.qr} size={256} />
+                        <img src={qrCode} alt="Lovense Pairing QR" className="w-[256px] h-[256px]" />
                     </div>
                     <div className="text-center space-y-3">
                         <div className="flex items-center justify-center gap-2 text-purple-400">
