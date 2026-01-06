@@ -28,6 +28,8 @@ export default function HostView() {
     const [copied, setCopied] = useState(false);
     const [messages, setMessages] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [intensity, setIntensity] = useState(0); // 0-100 for visual meter
+    const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
 
 
     useEffect(() => {
@@ -50,14 +52,21 @@ export default function HostView() {
             });
         });
 
-        socket.on('incoming-pulse', () => {
+        socket.on('incoming-pulse', ({ source, level }) => {
             const id = Date.now();
-            setIncomingPulses(prev => [...prev, { id }]);
+            setIncomingPulses(prev => [...prev.slice(-5), { id, level: level || 5 }]);
+            setIntensity(Math.min((level || 5) * 5, 100));
+            setLastAction(source || 'active');
+
+            // Decal intensity over time
+            setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
             setTimeout(() => setIncomingPulses(prev => prev.filter(p => p.id !== id)), 1000);
         });
 
         socket.on('new-message', ({ text }) => {
             setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
+            setIntensity(100); // Max blast on message
+            setTimeout(() => setIntensity(0), 1000);
         });
 
         return () => {
@@ -111,12 +120,21 @@ export default function HostView() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const bypassHandshake = () => {
+    const bypassHandshake = async () => {
         const id = customName.trim().toLowerCase() || 'dev';
-        socket.emit('join-host', id);
-        setToys({ 'SIM': { name: 'Direct Mode', type: 'Vibrate' } });
-        setStatus('connected');
-        createLink(id);
+        setIsLoading(true);
+        setError(null);
+        try {
+            socket.emit('join-host', id);
+            // We set mock toys for simulation
+            setToys({ 'SIM': { name: 'SIMULATED DEVICE', type: 'Vibrate' } });
+            await createLink(id);
+            setStatus('connected');
+        } catch (err) {
+            setError('Failed to enter test mode');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const createLink = async (uid) => {
@@ -257,15 +275,45 @@ export default function HostView() {
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5">
-                            <div className="w-16 h-16 bg-green-500/10 rounded-[1.5rem] flex items-center justify-center border border-green-500/10">
+                        <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
+                            {/* Animated background energy for the status card */}
+                            <motion.div
+                                className="absolute inset-0 bg-green-500/5"
+                                animate={{
+                                    opacity: [0.05, 0.15, 0.05],
+                                    scale: [1, 1.05, 1]
+                                }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                            />
+
+                            <div className="w-16 h-16 bg-green-500/10 rounded-[1.5rem] flex items-center justify-center border border-green-500/10 z-10">
                                 <Shield className="text-green-500" size={32} />
                             </div>
-                            <div>
+                            <div className="z-10">
                                 <h3 className="font-black text-2xl text-white tracking-tight">LINK SECURED</h3>
                                 <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase">
                                     {Object.keys(toys).length} Device(s) listening
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* Energy Meter */}
+                        <div className="mb-10 space-y-3">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Live Pulse Intensity</span>
+                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${intensity > 0 ? 'text-purple-400' : 'text-white/10'}`}>
+                                    {intensity > 0 ? (lastAction === 'voice' ? 'Whisper Syncing' : 'Typing Syncing') : 'Idle'}
+                                </span>
+                            </div>
+                            <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
+                                <motion.div
+                                    className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full"
+                                    animate={{
+                                        width: `${intensity}%`,
+                                        opacity: intensity > 0 ? 1 : 0.3
+                                    }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                />
                             </div>
                         </div>
 
@@ -336,13 +384,23 @@ export default function HostView() {
                             {incomingPulses.map(pulse => (
                                 <motion.div
                                     key={pulse.id}
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 0.4, scale: 1.2 }}
+                                    initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                                    animate={{
+                                        opacity: [0, 0.4, 0],
+                                        scale: [0.5, 1.5],
+                                        rotate: [0, 10]
+                                    }}
                                     exit={{ opacity: 0 }}
-                                    className="absolute inset-0 border-[20px] border-purple-500/30 rounded-[3rem]"
+                                    className="absolute inset-0 border-[40px] border-purple-500/20 rounded-[4rem]"
                                 />
                             ))}
                         </AnimatePresence>
+
+                        {/* Global Flash */}
+                        <motion.div
+                            className="absolute inset-0 bg-purple-500/10"
+                            animate={{ opacity: intensity > 20 ? 0.2 : 0 }}
+                        />
                     </div>
                 </div>
             )}

@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
 
         if (conn && conn.approved) {
             sendCommand(conn.host.uid, 'vibrate', intensity || 3, 1);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse');
+            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 3 });
         }
     });
 
@@ -235,7 +235,7 @@ io.on('connection', (socket) => {
         if (conn && conn.approved) {
             // Voice pulses might use 'air' if available, or just vibration
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse');
+            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
         }
     });
 

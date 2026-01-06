@@ -25,6 +25,7 @@ export default function TypistView() {
     const [favorites, setFavorites] = useState([]);
     const [isReplaying, setIsReplaying] = useState(false);
     const [ripples, setRipples] = useState([]); // Array of {id, x, y}
+    const [error, setError] = useState(null);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -61,6 +62,7 @@ export default function TypistView() {
             }
         } catch (err) {
             console.error('Check link error:', err);
+            setError(err.response?.data?.error || 'Link invalid or server unreachable');
             setStatus('invalid');
         }
     };
@@ -162,8 +164,22 @@ export default function TypistView() {
         if (isMicOn) requestAnimationFrame(processAudio);
     };
 
-    if (status === 'checking') return <div className="text-center p-20 animate-pulse">Initializing Link...</div>;
-    if (status === 'invalid') return <div className="text-center p-20 text-red-400">Invalid Link</div>;
+    if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest">Initializing Secure Link...</div>;
+    if (status === 'invalid') return (
+        <div className="max-w-md mx-auto glass p-10 rounded-3xl text-center space-y-6">
+            <div className="mx-auto w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center">
+                <Shield className="text-red-400" size={40} />
+            </div>
+            <h2 className="text-2xl font-bold italic text-red-400 uppercase">Link Invalid</h2>
+            <p className="text-white/60">{error || 'This link has expired or never existed.'}</p>
+            <button
+                onClick={() => window.location.href = '/'}
+                className="button-premium w-full"
+            >
+                Return to Home
+            </button>
+        </div>
+    );
     if (status === 'denied') return <div className="text-center p-20 text-red-500">Access Denied</div>;
     if (status === 'waiting-approval') return (
         <div className="max-w-md mx-auto glass p-10 rounded-3xl text-center space-y-6">
@@ -201,7 +217,16 @@ export default function TypistView() {
                 </div>
             </div>
 
-            <div className="glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[300px] flex flex-col">
+            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-300 ${micLevel > 5 ? 'border-pink-500/30' : 'border-white/10'}`}>
+                {/* Dynamic Background Glow */}
+                <motion.div
+                    className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5"
+                    animate={{
+                        opacity: micLevel > 0 ? 0.3 : 0.1,
+                        scale: micLevel > 5 ? 1.05 : 1
+                    }}
+                />
+
                 <AnimatePresence>
                     {ripples.map(r => (
                         <motion.div
@@ -223,31 +248,47 @@ export default function TypistView() {
                     {micLevel > 10 && (
                         <motion.div
                             initial={{ opacity: 0 }}
-                            animate={{ opacity: 0.1 }}
+                            animate={{ opacity: 0.2 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-pink-500 pointer-events-none"
+                            className="absolute inset-0 bg-pink-500/20 pointer-events-none"
                         />
                     )}
                 </AnimatePresence>
 
                 <textarea
-                    className="w-full h-48 bg-transparent text-2xl font-light placeholder:text-white/10 resize-none focus:outline-none leading-relaxed"
+                    className="w-full flex-grow bg-transparent text-2xl font-light placeholder:text-white/10 resize-none focus:outline-none leading-relaxed z-10"
                     placeholder="Whisper what you want..."
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={handleKeyDown}
                 />
 
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5">
-                    <div className="flex gap-4 text-white/40 text-sm italic">
-                        <span className="flex items-center gap-2"><Keyboard size={16} /> Keys sync pulses</span>
-                        <span className="flex items-center gap-2"><Mic size={16} /> Mic syncs air/vibe</span>
+                <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5 z-10">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex gap-4 text-white/40 text-[10px] uppercase font-bold tracking-widest">
+                            <span className="flex items-center gap-2"><Keyboard size={12} className="text-purple-400" /> Keys sync pulses</span>
+                            <span className="flex items-center gap-2"><Mic size={12} className="text-pink-400" /> Mic syncs air/vibe</span>
+                        </div>
+                        {isMicOn && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[8px] text-pink-400 font-black animate-pulse">VOICE LIVE</span>
+                                <div className="flex gap-0.5 items-end h-3">
+                                    {[...Array(5)].map((_, i) => (
+                                        <motion.div
+                                            key={i}
+                                            className="w-1 bg-pink-500/50 rounded-full"
+                                            animate={{ height: micLevel > (i * 2) ? '100%' : '20%' }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <button
-                        className="button-premium flex items-center gap-2 group"
+                        className="button-premium flex items-center gap-2 group py-4 px-10 rounded-2xl"
                         onClick={sendSurge}
                     >
-                        SUBMIT SURGE <Zap size={18} className="group-hover:fill-current" />
+                        SUBMIT SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-pulse" />
                     </button>
                 </div>
             </div>
