@@ -24,6 +24,9 @@ const PORT = process.env.PORT || 3001;
 const LOVENSE_URL = 'https://api.lovense.com/api/lan/v2/command';
 
 // API Routes
+app.get('/', (req, res) => {
+    res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
+});
 
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
