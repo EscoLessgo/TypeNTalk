@@ -43,7 +43,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3001;
-const LOVENSE_URL = 'https://api.lovense.com/api/lan/v2/command';
+const LOVENSE_URL = 'https://api.lovense-api.com/api/standard/v1/command';
 
 // API Routes
 app.get('/', (req, res) => {
@@ -185,13 +185,18 @@ io.on('connection', (socket) => {
             include: { host: true }
         });
         if (conn) {
+            // AUTO-APPROVE for simplified UX
+            await prisma.connection.update({
+                where: { slug },
+                data: { approved: true }
+            });
+            io.to(`typist:${slug}`).emit('approval-status', { approved: true });
             io.to(`host:${conn.host.uid}`).emit('approval-request', { slug });
         }
     });
 
-    // Host approves/denies typist
     socket.on('approve-typist', async ({ slug, approved }) => {
-        const conn = await prisma.connection.update({
+        await prisma.connection.update({
             where: { slug },
             data: { approved }
         });
