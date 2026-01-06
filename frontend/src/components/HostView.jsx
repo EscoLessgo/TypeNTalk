@@ -19,6 +19,7 @@ export default function HostView() {
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [copied, setCopied] = useState(false);
     const [messages, setMessages] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
 
 
     useEffect(() => {
@@ -64,10 +65,12 @@ export default function HostView() {
     const startSession = async () => {
         const id = customName.trim().toLowerCase();
         if (!id) {
-            setError('Please enter a name for the session');
+            setError('Please enter your Lovense username');
             return;
         }
 
+        setIsLoading(true);
+        setError(null);
         try {
             socket.emit('join-host', id);
             const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${id}`);
@@ -75,10 +78,15 @@ export default function HostView() {
                 setQrCode(res.data.qr);
                 setPairingCode(res.data.code);
                 setStatus('qr');
-                setError(null);
+            } else {
+                setError('Unexpected response from server');
             }
         } catch (err) {
-            setError('System error. Make sure you entered a name.');
+            console.error('Start session error:', err);
+            const msg = err.response?.data?.error || err.message || 'System error. Check your connection.';
+            setError(msg);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -143,14 +151,33 @@ export default function HostView() {
                             className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-2xl font-black focus:border-purple-500 outline-none uppercase transition-all placeholder:text-white/5"
                             value={customName}
                             onChange={(e) => setCustomName(e.target.value)}
+                            disabled={isLoading}
                         />
+
+                        {error && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center"
+                            >
+                                {error}
+                            </motion.div>
+                        )}
                     </div>
 
                     <button
                         onClick={startSession}
-                        className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20"
+                        disabled={isLoading}
+                        className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                        START PAIRING <ArrowRight size={24} />
+                        {isLoading ? (
+                            <div className="flex items-center gap-3">
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                CONNECTING...
+                            </div>
+                        ) : (
+                            <>START PAIRING <ArrowRight size={24} /></>
+                        )}
                     </button>
                 </div>
             )}
