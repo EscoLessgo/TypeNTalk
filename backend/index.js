@@ -13,6 +13,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Request logging for debugging
+app.use((req, res, next) => {
+    if (req.url !== '/health') {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    }
+    next();
+});
+
 const FRONTEND_PATH = path.join(__dirname, '../frontend/dist');
 const FRONTEND_INDEX = path.join(FRONTEND_PATH, 'index.html');
 
@@ -152,7 +160,8 @@ io.on('connection', (socket) => {
 
     socket.on('join-host', (uid) => {
         socket.join(`host:${uid}`);
-        console.log(`Host ${uid} joined room`);
+        console.log(`[SOCKET] Host ${uid} joined room host:${uid}`);
+        socket.emit('host:ready', { uid });
     });
 
     socket.on('join-typist', (slug) => {

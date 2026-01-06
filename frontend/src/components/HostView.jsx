@@ -4,32 +4,52 @@ import { QRCodeSVG } from 'qrcode.react';
 import socket from '../socket';
 import { Share2, ToyBrick, UserCheck, Shield, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
 
 const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 export default function HostView() {
     const [status, setStatus] = useState('idle'); // idle, qr, connected
+    const [qrCode, setQrCode] = useState(''); // Renamed from qrData
     const [username, setUsername] = useState('');
-    const [qrData, setQrData] = useState(null);
-    const [slug, setSlug] = useState('');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
     const [incomingPulses, setIncomingPulses] = useState([]); // Array of {id}
-    const [error, setError] = useState(null);
+    const [typistLink, setTypistLink] = useState(''); // Renamed from slug
+    const [error, setError] = useState(null); // Kept as null for consistency with original error handling
+    const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
 
     useEffect(() => {
-        // Auto-generate a session when the component mounts
-        const sessionUid = `host_${Math.random().toString(36).substring(2, 10)}`;
-        setUsername(sessionUid);
-        getQR(sessionUid);
-    }, []);
+        const id = uuidv4();
+        setUsername(id);
 
-    const getQR = async (uid) => {
+        const onConnect = () => {
+            setIsSocketConnected(true);
+            socket.emit('join-host', id);
+        };
+
+        const onDisconnect = () => setIsSocketConnected(false);
+
+        socket.on('connect', onConnect);
+        socket.on('disconnect', onDisconnect);
+
+        // If already connected
+        if (socket.connected) onConnect();
+
+        fetchQR(id);
+
+        return () => {
+            socket.off('connect', onConnect);
+            socket.off('disconnect', onDisconnect);
+        };
+    }, []); // Empty dependency array to run once on mount
+
+    const fetchQR = async (uid) => { // Renamed from getQR
         try {
             const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uid}`);
-            setQrData(res.data);
+            setQrCode(res.data.qr); // Use qrCode state
             setStatus('qr');
-            socket.emit('join-host', uid);
+            // socket.emit('join-host', uid); // Moved to onConnect
             setError(null);
         } catch (err) {
             console.error(err);
