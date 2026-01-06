@@ -15,6 +15,7 @@ export default function HostView() {
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
     const [incomingPulses, setIncomingPulses] = useState([]); // Array of {id}
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         // Auto-generate a session when the component mounts
@@ -29,8 +30,10 @@ export default function HostView() {
             setQrData(res.data);
             setStatus('qr');
             socket.emit('join-host', uid);
+            setError(null);
         } catch (err) {
             console.error(err);
+            setError('Backend unreachable. Make sure port 3001 is running.');
         }
     };
 
@@ -95,6 +98,18 @@ export default function HostView() {
                             The link for your typist will appear automatically.
                         </p>
                     </div>
+                </div>
+            )}
+
+            {error && (
+                <div className="glass p-8 rounded-3xl border-red-500/20 text-center space-y-4">
+                    <p className="text-red-400 font-semibold">{error}</p>
+                    <button
+                        className="px-6 py-2 bg-white/5 rounded-xl text-sm hover:bg-white/10 transition-all"
+                        onClick={() => window.location.reload()}
+                    >
+                        Try Again
+                    </button>
                 </div>
             )}
 

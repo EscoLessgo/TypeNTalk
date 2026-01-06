@@ -6,15 +6,15 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Host {
   id          String   @id @default(uuid())
   uid         String   @unique // Lovense User ID
   username    String
-  toys        Json?    // Store current toy info
+  toys        String?  // Store current toy info (JSON string)
   connections Connection[]
   createdAt   DateTime @default(now())
 }
@@ -34,7 +34,7 @@ model ResponseHistory {
   connectionId String
   connection   Connection @relation(fields: [connectionId], references: [id])
   text         String
-  pulses       Json       // Array of {time, intensity, duration}
+  pulses       String?    // JSON string array of {time, intensity, duration}
   isFavorite   Boolean    @default(false)
   createdAt    DateTime   @default(now())
 }

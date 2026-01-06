@@ -35,6 +35,16 @@ app.get('/api/lovense/qr', async (req, res) => {
 
     try {
         const token = process.env.LOVENSE_DEVELOPER_TOKEN;
+
+        // MOCK SUPPORT for initial testing if no token is provided
+        if (!token || token === 'your_lovense_token_here') {
+            console.log('Using mock QR code for testing');
+            return res.json({
+                qr: 'https://veroe.space/mock-qr-test',
+                message: 'MOCK QR: Set LOVENSE_DEVELOPER_TOKEN in .env for real connection'
+            });
+        }
+
         const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
             token: token,
             uid: username,
@@ -62,8 +72,8 @@ app.post('/api/lovense/callback', async (req, res) => {
     if (uid) {
         await prisma.host.upsert({
             where: { uid: uid },
-            update: { toys: toys, username: uid },
-            create: { uid: uid, username: uid, toys: toys }
+            update: { toys: JSON.stringify(toys), username: uid },
+            create: { uid: uid, username: uid, toys: JSON.stringify(toys) }
         });
 
         io.to(`host:${uid}`).emit('lovense:linked', { toys });
@@ -100,6 +110,16 @@ app.get('/api/connections/:slug', async (req, res) => {
     });
 
     if (!connection) return res.status(404).json({ error: 'Link invalid' });
+
+    // Parse JSON fields
+    if (connection.host.toys) connection.host.toys = JSON.parse(connection.host.toys);
+    if (connection.history) {
+        connection.history = connection.history.map(h => ({
+            ...h,
+            pulses: h.pulses ? JSON.parse(h.pulses) : []
+        }));
+    }
+
     res.json(connection);
 });
 
@@ -192,7 +212,7 @@ io.on('connection', (socket) => {
                 data: {
                     connectionId: conn.id,
                     text,
-                    pulses: pulses || []
+                    pulses: JSON.stringify(pulses || [])
                 }
             });
 
@@ -213,7 +233,7 @@ async function sendCommand(uid, command, strength, duration) {
             return await dispatchRaw(uid, 'vibrate', strength, duration);
         }
 
-        const toyList = host.toys; // This is a Record<id, toyDetails>
+        const toyList = JSON.parse(host.toys); // This is a Record<id, toyDetails>
         const commands = [];
 
         for (const [tId, toy] of Object.entries(toyList)) {
