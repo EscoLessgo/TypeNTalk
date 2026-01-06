@@ -111,6 +111,16 @@ app.post('/api/connections/create', async (req, res) => {
     const host = await prisma.host.findUnique({ where: { uid } });
     if (!host) return res.status(404).json({ error: 'Host not found. Link toy first.' });
 
+    // Check for an existing recent connection to prevent link-shuffling
+    const existing = await prisma.connection.findFirst({
+        where: { hostId: host.id },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    if (existing && !existing.approved) {
+        return res.json({ slug: existing.slug });
+    }
+
     const slug = uuidv4().substring(0, 8);
     const connection = await prisma.connection.create({
         data: {

@@ -19,21 +19,42 @@ export default function HostView() {
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [copied, setCopied] = useState(false);
 
+    const customNameRef = React.useRef(customName);
+    useEffect(() => { customNameRef.current = customName; }, [customName]);
+
     useEffect(() => {
-        const onConnect = () => setIsSocketConnected(true);
+        const onConnect = () => {
+            setIsSocketConnected(true);
+            if (customNameRef.current) {
+                socket.emit('join-host', customNameRef.current.trim().toLowerCase());
+            }
+        };
         const onDisconnect = () => setIsSocketConnected(false);
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         if (socket.connected) onConnect();
 
         socket.on('lovense:linked', ({ toys }) => {
-            setToys(toys);
-            setStatus('connected');
-            createLink(customName.trim().toLowerCase());
+            setToys(prev => {
+                // Only trigger link creation if we aren't already connected
+                // or if the toys actually changed
+                return toys;
+            });
+
+            setStatus(currentStatus => {
+                if (currentStatus !== 'connected') {
+                    createLink(customNameRef.current.trim().toLowerCase());
+                    return 'connected';
+                }
+                return currentStatus;
+            });
         });
 
-        socket.on('approval-request', ({ slug }) => {
-            setTypists(prev => [...prev, { slug }]);
+        socket.on('approval-request', ({ slug: typistSlug }) => {
+            setTypists(prev => {
+                if (prev.find(t => t.slug === typistSlug)) return prev;
+                return [...prev, { slug: typistSlug }];
+            });
         });
 
         socket.on('incoming-pulse', () => {
@@ -43,13 +64,13 @@ export default function HostView() {
         });
 
         return () => {
-            socket.off('connect');
-            socket.off('disconnect');
+            socket.off('connect', onConnect);
+            socket.off('disconnect', onDisconnect);
             socket.off('lovense:linked');
             socket.off('approval-request');
             socket.off('incoming-pulse');
         };
-    }, [customName]);
+    }, []); // Stable listeners
 
     const startSession = async () => {
         const id = customName.trim().toLowerCase();
@@ -87,6 +108,7 @@ export default function HostView() {
     };
 
     const createLink = async (uid) => {
+        if (slug) return; // Don't create if we already have one
         try {
             const res = await axios.post(`${API_BASE}/api/connections/create`, { uid });
             setSlug(res.data.slug);
