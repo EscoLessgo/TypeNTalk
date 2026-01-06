@@ -16,16 +16,21 @@ export default function HostView() {
     const [toys, setToys] = useState({});
     const [incomingPulses, setIncomingPulses] = useState([]); // Array of {id}
 
-    const handleGetQR = async () => {
-        if (!username) return alert('Enter a username');
+    useEffect(() => {
+        // Auto-generate a session when the component mounts
+        const sessionUid = `host_${Math.random().toString(36).substring(2, 10)}`;
+        setUsername(sessionUid);
+        getQR(sessionUid);
+    }, []);
+
+    const getQR = async (uid) => {
         try {
-            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${username}`);
+            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uid}`);
             setQrData(res.data);
             setStatus('qr');
-            socket.emit('join-host', username);
+            socket.emit('join-host', uid);
         } catch (err) {
             console.error(err);
-            alert('Failed to get QR');
         }
     };
 
@@ -72,32 +77,23 @@ export default function HostView() {
                 <p className="text-white/60">Pair your toy and invite a typist.</p>
             </header>
 
-            {status === 'idle' && (
-                <div className="glass p-8 rounded-3xl space-y-6">
-                    <div className="space-y-4">
-                        <label className="block text-sm font-medium text-white/70">Lovense Username / UID</label>
-                        <input
-                            type="text"
-                            className="input-premium"
-                            placeholder="e.g. Esco"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                        />
-                    </div>
-                    <button className="button-premium w-full" onClick={handleGetQR}>
-                        Generate Connection QR
-                    </button>
-                </div>
-            )}
-
-            {status === 'qr' && qrData && (
-                <div className="glass p-10 rounded-3xl flex flex-col items-center space-y-8">
-                    <div className="p-4 bg-white rounded-2xl">
+            {(status === 'qr' || status === 'idle') && qrData && (
+                <div className="glass p-10 rounded-3xl flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500">
+                    <div className="p-4 bg-white rounded-2xl shadow-2xl shadow-purple-500/20">
                         <QRCodeSVG value={qrData.qr} size={256} />
                     </div>
-                    <div className="text-center space-y-2">
-                        <p className="font-semibold text-lg">Scan with Lovense Remote App</p>
-                        <p className="text-sm text-white/50">Waiting for connection...</p>
+                    <div className="text-center space-y-3">
+                        <div className="flex items-center justify-center gap-2 text-purple-400">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
+                            </span>
+                            <p className="font-semibold text-lg tracking-wide uppercase">Waiting for Lovense App</p>
+                        </div>
+                        <p className="text-sm text-white/40 max-w-xs mx-auto">
+                            Scan this with the <strong>Lovense Remote App</strong> to link your toys.
+                            The link for your typist will appear automatically.
+                        </p>
                     </div>
                 </div>
             )}
