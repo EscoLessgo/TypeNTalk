@@ -5,7 +5,9 @@
 }
 
 body {
-  @apply bg-[#0a0a0a] text-white selection:bg-purple-500/30 font-sans;
+  background-color: #0a0a0a;
+  color: white;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   background-image:
     radial-gradient(circle at 0% 0%, rgba(109, 40, 217, 0.15) 0, transparent 50%),
     radial-gradient(circle at 100% 100%, rgba(219, 39, 119, 0.15) 0, transparent 50%);
@@ -13,17 +15,54 @@ body {
 }
 
 .glass {
-  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+  background-color: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .input-premium {
-  @apply bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all text-lg w-full;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 1rem 1.5rem;
+  transition: all 0.2s;
+  font-size: 1.125rem;
+  width: 100%;
+}
+
+.input-premium:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.5);
 }
 
 .button-premium {
-  @apply bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-3 px-8 rounded-2xl transition-all active:scale-95 shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed;
+  background: linear-gradient(to right, #7c3aed, #db2777);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  border-radius: 1rem;
+  transition: all 0.2s;
+  box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.2);
+}
+
+.button-premium:hover {
+  background: linear-gradient(to right, #8b5cf6, #ec4899);
+}
+
+.button-premium:active {
+  transform: scale(0.95);
+}
+
+.button-premium:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #a78bfa, #f472b6);
 }
