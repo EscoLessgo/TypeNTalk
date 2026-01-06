@@ -26,6 +26,7 @@ export default function TypistView() {
     const [isReplaying, setIsReplaying] = useState(false);
     const [ripples, setRipples] = useState([]); // Array of {id, x, y}
     const [error, setError] = useState(null);
+    const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -34,14 +35,23 @@ export default function TypistView() {
     const lastPulseRef = useRef(0);
 
     useEffect(() => {
+        const onConnect = () => setIsSocketConnected(true);
+        const onDisconnect = () => setIsSocketConnected(false);
+        socket.on('connect', onConnect);
+        socket.on('disconnect', onDisconnect);
+        if (socket.connected) onConnect();
+
         checkSlug();
         socket.emit('join-typist', slug);
 
         socket.on('approval-status', ({ approved }) => {
+            console.log(`[SOCKET] Approval status received: ${approved}`);
             setStatus(approved ? 'connected' : 'denied');
         });
 
         return () => {
+            socket.off('connect');
+            socket.off('disconnect');
             socket.off('approval-status');
             stopMic();
         };
@@ -193,7 +203,15 @@ export default function TypistView() {
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
-            <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl">
+            <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative">
+                {/* Status Indicator */}
+                <div className="absolute -top-12 right-0 flex items-center gap-2 px-3 py-1.5 glass rounded-full">
+                    <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
+                        {isSocketConnected ? 'SERVER LIVE' : 'OFFLINE'}
+                    </span>
+                </div>
+
                 <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                     <span className="font-semibold text-white/80">Synchronized with <span className="text-purple-400">{hostName}</span></span>

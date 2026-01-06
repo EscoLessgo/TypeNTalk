@@ -220,8 +220,11 @@ io.on('connection', (socket) => {
         });
 
         if (conn && conn.approved) {
+            console.log(`[PULSE] Typing pulse from typist for slug ${slug} -> targeting host ${conn.host.uid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity || 3, 1);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 3 });
+        } else {
+            console.log(`[PULSE] Ignored typing pulse. Conn found: ${!!conn}, Approved: ${conn?.approved}`);
         }
     });
 
@@ -233,6 +236,7 @@ io.on('connection', (socket) => {
         });
 
         if (conn && conn.approved) {
+            console.log(`[PULSE] Voice pulse from typist for slug ${slug} -> targeting host ${conn.host.uid} (level ${intensity})`);
             // Voice pulses might use 'air' if available, or just vibration
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
