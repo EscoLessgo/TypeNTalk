@@ -291,6 +291,6 @@ app.get('*', (req, res) => {
     res.sendFile(FRONTEND_INDEX);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
