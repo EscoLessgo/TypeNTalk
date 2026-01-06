@@ -66,7 +66,7 @@ app.get('/api/lovense/qr', async (req, res) => {
             return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN not set in environment' });
         }
 
-        const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
+        const response = await axios.post('https://api.lovense-api.com/api/standard/v1/getQrCode', {
             token: token,
             uid: username,
             uname: username,
@@ -108,8 +108,12 @@ app.post('/api/connections/create', async (req, res) => {
     const { uid } = req.body; // uid is the host's Lovense UID
     if (!uid) return res.status(400).json({ error: 'Host UID required' });
 
-    const host = await prisma.host.findUnique({ where: { uid } });
-    if (!host) return res.status(404).json({ error: 'Host not found. Link toy first.' });
+    // Ensure the host exists in our DB (especially important for 'Skip To Link' flow)
+    const host = await prisma.host.upsert({
+        where: { uid },
+        update: { username: uid },
+        create: { uid, username: uid }
+    });
 
     // Check for an existing recent connection to prevent link-shuffling
     const existing = await prisma.connection.findFirst({
@@ -267,29 +271,29 @@ async function sendCommand(uid, command, strength, duration) {
         const host = await prisma.host.findUnique({ where: { uid } });
         if (!host || !host.toys) {
             // Fallback to generic vibrate if no toy info stored
-            return await dispatchRaw(uid, 'vibrate', strength, duration);
+            return await dispatchRaw(uid, null, 'vibrate', strength, duration);
         }
 
-        const toyList = JSON.parse(host.toys); // This is a Record<id, toyDetails>
+        const toyList = JSON.parse(host.toys);
         const commands = [];
 
         for (const [tId, toy] of Object.entries(toyList)) {
             const name = (toy.name || '').toLowerCase();
             const type = (toy.type || '').toLowerCase();
 
+            // If it's a simulated/test toy, we still attempt a generic send
+            const targetToyId = tId === 'SIM' ? null : tId;
+
             // Default: Most toys support 'vibrate'
-            commands.push(dispatchRaw(uid, 'vibrate', strength, duration));
+            commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration));
 
             // Specialized Actions
             if (name.includes('nora') || type === 'nora') {
-                // Nora supports rotation. For pulses, we can add a quick rotation.
-                commands.push(dispatchRaw(uid, 'rotate', Math.ceil(strength / 2), duration));
+                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
             }
 
             if (name.includes('max') || type === 'max') {
-                // Max is suction/pumping. 
-                // Pumping strength is 0-3 in some APIs, but Standard API often maps 0-20.
-                commands.push(dispatchRaw(uid, 'pump', strength, duration));
+                commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration));
             }
 
             if (name.includes('edge') || type === 'edge') {
@@ -303,7 +307,7 @@ async function sendCommand(uid, command, strength, duration) {
     }
 }
 
-async function dispatchRaw(uid, command, strength, duration) {
+async function dispatchRaw(uid, toyId, command, strength, duration) {
     const payload = {
         token: process.env.LOVENSE_DEVELOPER_TOKEN,
         uid: uid,
@@ -313,7 +317,9 @@ async function dispatchRaw(uid, command, strength, duration) {
         apiVer: 1
     };
 
-    console.log(`[LOVENSE] Sending command: ${command} (${strength}) to ${uid}`);
+    if (toyId) payload.toyId = toyId;
+
+    console.log(`[LOVENSE] Sending command: ${command} (${strength}) to ${uid}${toyId ? ` (Toy: ${toyId})` : ''}`);
 
     return axios.post(LOVENSE_URL, payload)
         .then(response => {

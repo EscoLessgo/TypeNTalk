@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight } from 'lucide-react';
+import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
@@ -18,6 +18,8 @@ export default function HostView() {
     const [error, setError] = useState(null);
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [copied, setCopied] = useState(false);
+    const [messages, setMessages] = useState([]);
+
 
     useEffect(() => {
         const onConnect = () => setIsSocketConnected(true);
@@ -45,12 +47,17 @@ export default function HostView() {
             setTimeout(() => setIncomingPulses(prev => prev.filter(p => p.id !== id)), 1000);
         });
 
+        socket.on('new-message', ({ text }) => {
+            setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
+        });
+
         return () => {
             socket.off('connect');
             socket.off('disconnect');
             socket.off('lovense:linked');
             socket.off('approval-request');
             socket.off('incoming-pulse');
+            socket.off('new-message');
         };
     }, [customName]);
 
@@ -240,6 +247,55 @@ export default function HostView() {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* Live Message Stream */}
+                    <AnimatePresence>
+                        {messages.length > 0 && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="glass p-8 rounded-[2.5rem] space-y-6"
+                            >
+                                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                                    <h3 className="text-sm font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Sparkles size={16} className="text-purple-500" /> Recent Whispers
+                                    </h3>
+                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                                </div>
+
+                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {messages.map((msg) => (
+                                        <motion.div
+                                            key={msg.id}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all"
+                                        >
+                                            <p className="text-lg text-white font-medium leading-relaxed">{msg.text}</p>
+                                            <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">
+                                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Visual Pulse Overlays */}
+                    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+                        <AnimatePresence>
+                            {incomingPulses.map(pulse => (
+                                <motion.div
+                                    key={pulse.id}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 0.4, scale: 1.2 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute inset-0 border-[20px] border-purple-500/30 rounded-[3rem]"
+                                />
+                            ))}
+                        </AnimatePresence>
                     </div>
                 </div>
             )}
