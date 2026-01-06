@@ -40,13 +40,8 @@ app.get('/api/lovense/qr', async (req, res) => {
     try {
         const token = process.env.LOVENSE_DEVELOPER_TOKEN;
 
-        // MOCK SUPPORT for initial testing if no token is provided
-        if (!token || token === 'your_lovense_token_here') {
-            console.log('Using mock QR code for testing');
-            return res.json({
-                qr: 'https://veroe.space/mock-qr-test',
-                message: 'MOCK QR: Set LOVENSE_DEVELOPER_TOKEN in .env for real connection'
-            });
+        if (!token) {
+            return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN not set in environment' });
         }
 
         const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
@@ -149,21 +144,6 @@ io.on('connection', (socket) => {
     socket.on('join-typist', (slug) => {
         socket.join(`typist:${slug}`);
         console.log(`Typist for ${slug} joined room`);
-    });
-
-    socket.on('test-link-simulation', async ({ uid }) => {
-        const mockToys = {
-            "mock_toy_1": { name: "Lush 3", type: "vibrator", id: "mock_toy_1" },
-            "mock_toy_2": { name: "Max 2", type: "suction", id: "mock_toy_2" }
-        };
-
-        await prisma.host.upsert({
-            where: { uid: uid },
-            update: { toys: JSON.stringify(mockToys), username: "Tester" },
-            create: { uid: uid, username: "Tester", toys: JSON.stringify(mockToys) }
-        });
-
-        io.to(`host:${uid}`).emit('lovense:linked', { toys: mockToys });
     });
 
     socket.on('request-approval', async ({ slug }) => {

@@ -95,16 +95,8 @@ export default function HostView() {
                         </div>
                         <p className="text-sm text-white/40 max-w-xs mx-auto">
                             Scan this with the <strong>Lovense Remote App</strong> (Standard Solution).
+                            The link for your typist will appear here as soon as you scan.
                         </p>
-
-                        <div className="pt-4 mt-4 border-t border-white/5">
-                            <button
-                                onClick={() => socket.emit('test-link-simulation', { uid: username })}
-                                className="text-[10px] text-white/20 hover:text-white/40 uppercase tracking-widest transition-colors"
-                            >
-                                [ DEV ] Simulate Successful Link (No Device)
-                            </button>
-                        </div>
                     </div>
                 </div>
             )}
