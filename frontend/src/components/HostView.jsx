@@ -4,7 +4,15 @@ import socket from '../socket';
 import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
+const getApiBase = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3001';
+    }
+    return window.location.origin;
+};
+
+const API_BASE = getApiBase();
 
 export default function HostView() {
     const [status, setStatus] = useState('setup'); // setup, qr, connected

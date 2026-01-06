@@ -5,7 +5,15 @@ import { useParams } from 'react-router-dom';
 import { Send, Mic, MicOff, Keyboard, Zap, Heart, History, Play, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
+const getApiBase = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3001';
+    }
+    return window.location.origin;
+};
+
+const API_BASE = getApiBase();
 
 export default function TypistView() {
     const { slug } = useParams();
@@ -52,6 +60,7 @@ export default function TypistView() {
                 socket.emit('request-approval', { slug });
             }
         } catch (err) {
+            console.error('Check link error:', err);
             setStatus('invalid');
         }
     };
