@@ -43,7 +43,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3001;
-const LOVENSE_URL = 'https://api.lovense-api.com/api/standard/v1/command';
+const LOVENSE_URL = 'https://api.lovense.com/api/standard/v1/command';
 
 // API Routes
 app.get('/', (req, res) => {
@@ -66,11 +66,10 @@ app.get('/api/lovense/qr', async (req, res) => {
             return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN not set in environment' });
         }
 
-        const response = await axios.post('https://api.lovense-api.com/api/standard/v1/getQrCode', {
+        const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
             token: token,
             uid: username,
             uname: username,
-            type: 'standard',
             v: 2
         });
 
