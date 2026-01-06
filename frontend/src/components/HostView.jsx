@@ -5,7 +5,7 @@ import socket from '../socket';
 import { Share2, ToyBrick, UserCheck, Shield, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 export default function HostView() {
     const [status, setStatus] = useState('idle'); // idle, qr, connected

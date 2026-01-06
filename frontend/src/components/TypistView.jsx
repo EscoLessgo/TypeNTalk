@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 import { Send, Mic, MicOff, Keyboard, Zap, Heart, History, Play, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 export default function TypistView() {
     const { slug } = useParams();
