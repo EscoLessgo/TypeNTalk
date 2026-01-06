@@ -16,6 +16,13 @@ app.use(express.json());
 const FRONTEND_PATH = path.join(__dirname, '../frontend/dist');
 const FRONTEND_INDEX = path.join(FRONTEND_PATH, 'index.html');
 
+console.log('--- Startup Config ---');
+console.log('__dirname:', __dirname);
+console.log('Frontend Path:', FRONTEND_PATH);
+console.log('Frontend Index:', FRONTEND_INDEX);
+console.log('Database URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET (using sqlite)');
+console.log('---------------------');
+
 // Serve static files from the frontend build
 app.use(express.static(FRONTEND_PATH));
 
@@ -291,6 +298,19 @@ app.get('*', (req, res) => {
     res.sendFile(FRONTEND_INDEX);
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL: Uncaught Exception:', err);
 });
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+try {
+    server.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server fully operational on port ${PORT}`);
+        console.log(`🔗 Health check: /health`);
+    });
+} catch (err) {
+    console.error('FAILED TO START SERVER:', err);
+}
