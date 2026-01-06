@@ -6,11 +6,15 @@ const axios = require('axios');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the frontend build
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -147,6 +151,21 @@ io.on('connection', (socket) => {
         console.log(`Typist for ${slug} joined room`);
     });
 
+    socket.on('test-link-simulation', async ({ uid }) => {
+        const mockToys = {
+            "mock_toy_1": { name: "Lush 3", type: "vibrator", id: "mock_toy_1" },
+            "mock_toy_2": { name: "Max 2", type: "suction", id: "mock_toy_2" }
+        };
+
+        await prisma.host.upsert({
+            where: { uid: uid },
+            update: { toys: JSON.stringify(mockToys), username: "Tester" },
+            create: { uid: uid, username: "Tester", toys: JSON.stringify(mockToys) }
+        });
+
+        io.to(`host:${uid}`).emit('lovense:linked', { toys: mockToys });
+    });
+
     socket.on('request-approval', async ({ slug }) => {
         const conn = await prisma.connection.findUnique({
             where: { slug },
@@ -279,6 +298,11 @@ async function dispatchRaw(uid, command, strength, duration) {
         console.error(`Fetch failed for ${command}:`, e.message);
     });
 }
+
+// Fallback for React routing - must be AFTER all other routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

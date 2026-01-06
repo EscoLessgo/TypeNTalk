@@ -80,7 +80,7 @@ export default function HostView() {
                 <p className="text-white/60">Pair your toy and invite a typist.</p>
             </header>
 
-            {(status === 'qr' || status === 'idle') && qrData && (
+            {status === 'qr' && qrData && (
                 <div className="glass p-10 rounded-3xl flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500">
                     <div className="p-4 bg-white rounded-2xl shadow-2xl shadow-purple-500/20">
                         <QRCodeSVG value={qrData.qr} size={256} />
@@ -94,9 +94,17 @@ export default function HostView() {
                             <p className="font-semibold text-lg tracking-wide uppercase">Waiting for Lovense App</p>
                         </div>
                         <p className="text-sm text-white/40 max-w-xs mx-auto">
-                            Scan this with the <strong>Lovense Remote App</strong> to link your toys.
-                            The link for your typist will appear automatically.
+                            Scan this with the <strong>Lovense Remote App</strong> (Standard Solution).
                         </p>
+
+                        <div className="pt-4 mt-4 border-t border-white/5">
+                            <button
+                                onClick={() => socket.emit('test-link-simulation', { uid: username })}
+                                className="text-[10px] text-white/20 hover:text-white/40 uppercase tracking-widest transition-colors"
+                            >
+                                [ DEV ] Simulate Successful Link (No Device)
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
