@@ -13,8 +13,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const FRONTEND_PATH = path.join(process.cwd(), 'frontend/dist');
+const FRONTEND_INDEX = path.join(FRONTEND_PATH, 'index.html');
+
 // Serve static files from the frontend build
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.use(express.static(FRONTEND_PATH));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -30,6 +33,10 @@ const LOVENSE_URL = 'https://api.lovense.com/api/lan/v2/command';
 // API Routes
 app.get('/', (req, res) => {
     res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date() });
 });
 
 // Host: Get QR for linking toy
@@ -281,7 +288,7 @@ async function dispatchRaw(uid, command, strength, duration) {
 
 // Fallback for React routing - must be AFTER all other routes
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    res.sendFile(FRONTEND_INDEX);
 });
 
 server.listen(PORT, () => {

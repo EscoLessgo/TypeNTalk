@@ -1,14 +1,14 @@
+```json
 {
   "name": "lovense-sync",
   "version": "1.0.0",
   "scripts": {
-    "start": "npm run start:backend",
-    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install && npx prisma generate",
+    "start": "cd backend && node index.js",
+    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install && npx prisma generate && npx prisma db push --accept-data-loss",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
-    "start:backend": "cd backend && npm start",
-    "build:backend": "cd backend && npx prisma generate",
     "build:frontend": "cd frontend && npm run build"
   }
 }
+```
