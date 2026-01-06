@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Host {
+  id          String   @id @default(uuid())
+  uid         String   @unique // Lovense User ID
+  username    String
+  toys        Json?    // Store current toy info
+  connections Connection[]
+  createdAt   DateTime @default(now())
+}
+
+model Connection {
+  id        String   @id @default(uuid())
+  slug      String   @unique // The random URL slug for the typist
+  hostId    String
+  host      Host     @relation(fields: [hostId], references: [id])
+  approved  Boolean  @default(false)
+  history   ResponseHistory[]
+  createdAt DateTime @default(now())
+}
+
+model ResponseHistory {
+  id           String     @id @default(uuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id])
+  text         String
+  pulses       Json       // Array of {time, intensity, duration}
+  isFavorite   Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+}

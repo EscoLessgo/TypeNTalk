@@ -1,0 +1,9 @@
+node_modules
+.env
+dist
+.next
+.vercel
+build
+*.log
+.DS_Store
+package-lock.json
