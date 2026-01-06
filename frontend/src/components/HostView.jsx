@@ -39,31 +39,38 @@ export default function HostView() {
         socket.on('disconnect', onDisconnect);
         if (socket.connected) onConnect();
 
-        socket.on('lovense:linked', ({ toys }) => {
+        socket.on('lovense:linked', (data = {}) => {
+            const { toys } = data;
+            if (!toys) return;
             setToys(toys);
             setStatus('connected');
             createLink(customName.trim().toLowerCase());
         });
 
-        socket.on('approval-request', ({ slug: typistSlug }) => {
+        socket.on('approval-request', (data = {}) => {
+            const { slug: typistSlug } = data;
+            if (!typistSlug) return;
             setTypists(prev => {
                 if (prev.find(t => t.slug === typistSlug)) return prev;
                 return [...prev, { slug: typistSlug }];
             });
         });
 
-        socket.on('incoming-pulse', ({ source, level }) => {
+        socket.on('incoming-pulse', (data = {}) => {
+            const { source, level } = data;
             const id = Date.now();
             setIncomingPulses(prev => [...prev.slice(-5), { id, level: level || 5 }]);
             setIntensity(Math.min((level || 5) * 5, 100));
             setLastAction(source || 'active');
 
-            // Decal intensity over time
+            // Decay intensity over time
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
             setTimeout(() => setIncomingPulses(prev => prev.filter(p => p.id !== id)), 1000);
         });
 
-        socket.on('new-message', ({ text }) => {
+        socket.on('new-message', (data = {}) => {
+            const { text } = data;
+            if (!text) return;
             setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
             setIntensity(100); // Max blast on message
             setTimeout(() => setIntensity(0), 1000);

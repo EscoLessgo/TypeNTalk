@@ -44,7 +44,8 @@ export default function TypistView() {
         checkSlug();
         socket.emit('join-typist', slug);
 
-        socket.on('approval-status', ({ approved }) => {
+        socket.on('approval-status', (data = {}) => {
+            const { approved } = data;
             console.log(`[SOCKET] Approval status received: ${approved}`);
             setStatus(approved ? 'connected' : 'denied');
         });

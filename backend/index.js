@@ -255,7 +255,7 @@ io.on('connection', (socket) => {
             const duration = Math.min(text.length * 0.1, 5); // 0.1s per char, max 5s
 
             sendCommand(conn.host.uid, 'vibrate', surgeIntensity, duration);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse');
+            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
 
             // Save to history
             await prisma.responseHistory.create({
