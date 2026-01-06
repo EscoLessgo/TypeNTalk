@@ -303,13 +303,22 @@ async function dispatchRaw(uid, command, strength, duration) {
         token: process.env.LOVENSE_DEVELOPER_TOKEN,
         uid: uid,
         command: command,
-        strength: Math.min(strength, 20),
+        strength: Math.min(Math.max(strength, 0), 20),
         timeSec: duration,
         apiVer: 1
     };
-    return axios.post(LOVENSE_URL, payload).catch(e => {
-        console.error(`Fetch failed for ${command}:`, e.message);
-    });
+
+    console.log(`[LOVENSE] Sending command: ${command} (${strength}) to ${uid}`);
+
+    return axios.post(LOVENSE_URL, payload)
+        .then(response => {
+            console.log(`[LOVENSE] Response for ${command}:`, response.data);
+            return response.data;
+        })
+        .catch(e => {
+            console.error(`[LOVENSE] Fetch failed for ${command}:`, e.message);
+            if (e.response) console.error(`[LOVENSE] Error data:`, e.response.data);
+        });
 }
 
 // Fallback for React routing - must be AFTER all other routes
