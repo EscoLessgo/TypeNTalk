@@ -536,6 +536,12 @@ export default function HostView() {
                                         >
                                             {copied ? 'COPIED!' : 'COPY SECRET LINK'}
                                         </button>
+                                        <button
+                                            onClick={testVibration}
+                                            className="w-full py-4 border-2 border-dashed border-purple-500/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Zap size={12} /> TEST MY VIBRATION
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="p-5 rounded-2xl bg-purple-500/5 text-center">
