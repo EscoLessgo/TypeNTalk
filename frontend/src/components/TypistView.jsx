@@ -179,25 +179,29 @@ export default function TypistView() {
         const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
         analyzerRef.current.getByteFrequencyData(dataArray);
 
-        // Focus on lower frequency bins where speech energy is concentrated (approx 0-2500Hz)
-        // Each bin is ~86Hz (for 44.1kHz). 30 bins covers ~2.5kHz.
         let sum = 0;
-        const binCount = 30;
+        const binCount = 40; // Use slightly more spectrum for better speech capture
         for (let i = 0; i < binCount; i++) {
             sum += dataArray[i];
         }
 
         const average = sum / binCount;
-        // Sensitivity: /4 instead of /5 or /10
-        const normalized = Math.min(Math.floor(average / 4), 20);
+
+        // Punchier Curve: average/3 (more aggressive) 
+        // Gate: if average < 10, don't trigger (eliminates background hum)
+        let normalized = 0;
+        if (average > 10) {
+            normalized = Math.min(Math.floor(average / 3), 20);
+        }
 
         setMicLevel(normalized);
 
-        // Send pulse if level is significant
-        if (normalized > 0) {
+        // Send pulse if level is significant (Gate check)
+        if (normalized >= 4) {
             const now = Date.now();
-            if (now - lastPulseRef.current > 150) { // Slower throttle for voice to prevent jamming
-                socket.emit('voice-pulse', { slug, intensity: Math.max(normalized, 1) });
+            // Fast Lane: 100ms throttle for 'liquid' feel without flooding
+            if (now - lastPulseRef.current > 100) {
+                socket.emit('voice-pulse', { slug, intensity: normalized });
                 lastPulseRef.current = now;
             }
         }
