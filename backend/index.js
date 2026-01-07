@@ -376,32 +376,46 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
         'https://api.lovense.com/api/standard/v1/command'
     ];
 
-    const payload = {
-        token: token,
-        uid: uid,
-        command: command,
-        strength: Math.min(Math.max(strength, 0), 20),
-        timeSec: duration,
-        apiVer: 1
-    };
-
-    if (toyId) payload.toyId = toyId;
-
-    // Try primary, then secondary if needed
     for (const url of apiUrls) {
         try {
             const domain = url.split('/')[2];
-            console.log(`[LOVENSE] Sending ${command}:${strength} to ${uid} via ${domain}`);
+            const isV2 = url.includes('/v2/');
+
+            const payload = {
+                token: token,
+                uid: uid,
+                apiVer: 1,
+                timeSec: duration
+            };
+
+            if (isV2) {
+                payload.command = "Function";
+                payload.action = `${command}:${Math.min(Math.max(strength, 0), 20)}`;
+            } else {
+                payload.command = command.toLowerCase();
+                payload.strength = Math.min(Math.max(strength, 0), 20);
+            }
+
+            if (toyId) payload.toyId = toyId;
+
+            console.log(`[LOVENSE] Dispatching via ${domain} (${isV2 ? 'V2' : 'V1'}) | Action: ${payload.action || payload.command}`);
             const response = await axios.post(url, payload, { timeout: 8000 });
 
-            const isSuccess = response.data.result === true || response.data.code === 200 || response.data.result === 'success';
+            // CRITICAL SUCCESS CHECK: Must have result=true/1/'success'. 
+            // Lovense server often returns code:200 even if the toy is offline!
+            const isSuccess = response.data.result === true ||
+                response.data.result === 1 ||
+                response.data.result === 'success' ||
+                response.data.message === 'success';
 
             const feedback = {
                 success: isSuccess,
-                message: isSuccess ? `TOY RESPONDED OK (${domain})` : `API REJECTED: ${response.data.message || response.data.code}`,
+                message: isSuccess ? `TOY RECEIVED SIGNAL (${domain})` : `TOY REJECTED: ${response.data.message || response.data.code || 'Offline'}`,
                 code: response.data.code,
                 url: domain
             };
+
+            console.log(`[LOVENSE] Result from ${domain}:`, isSuccess ? 'SUCCESS' : 'FAILURE', JSON.stringify(response.data));
 
             io.to(`host:${uid}`).emit('api-feedback', feedback);
             if (directSocket) directSocket.emit('api-feedback', feedback);
