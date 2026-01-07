@@ -147,7 +147,7 @@ export default function HostView() {
 
     const testVibration = () => {
         if (status !== 'connected') return;
-        socket.emit('typing-pulse', { slug, intensity: 10 });
+        socket.emit('test-toy', { uid: customName });
     };
 
     const copyPairingCode = () => {

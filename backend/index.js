@@ -62,8 +62,12 @@ app.get('/api/lovense/qr', async (req, res) => {
     try {
         const token = process.env.LOVENSE_DEVELOPER_TOKEN;
 
-        if (!token) {
-            return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN not set in environment' });
+        if (!token || token.length < 10) {
+            console.error('[CRITICAL] LOVENSE_DEVELOPER_TOKEN is missing or too short.');
+            return res.status(500).json({
+                error: 'LOVENSE_DEVELOPER_TOKEN is not configured.',
+                details: 'Please add your Developer Token to the Railway Environment Variables. The app cannot function without it.'
+            });
         }
 
         const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
@@ -220,6 +224,12 @@ io.on('connection', (socket) => {
         if (conn) {
             io.to(`host:${conn.host.uid}`).emit('typing-draft', { text });
         }
+    });
+
+    socket.on('test-toy', async ({ uid }) => {
+        console.log(`[TEST-TOY] Direct test requested for UID: ${uid}`);
+        sendCommand(uid, 'vibrate', 12, 2);
+        io.to(`host:${uid}`).emit('incoming-pulse', { source: 'test', level: 12 });
     });
 
     // Real-time pulse from typing
