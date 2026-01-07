@@ -228,8 +228,16 @@ io.on('connection', (socket) => {
 
     socket.on('test-toy', async ({ uid }) => {
         console.log(`[TEST-TOY] Direct test requested for UID: ${uid}`);
-        sendCommand(uid, 'vibrate', 12, 2);
-        io.to(`host:${uid}`).emit('incoming-pulse', { source: 'test', level: 12 });
+        socket.emit('api-feedback', {
+            success: true,
+            message: 'Server received click. Dispatching to Lovense Cloud...',
+            url: 'local'
+        });
+        sendCommand(uid, 'vibrate', 20, 4, socket); // Pass socket for direct feedback
+    });
+
+    socket.on('ping-server', () => {
+        socket.emit('api-feedback', { success: true, message: 'PONG! Socket connection is healthy.', url: 'server' });
     });
 
     // Real-time pulse from typing
@@ -295,62 +303,56 @@ io.on('connection', (socket) => {
     });
 });
 
-async function sendCommand(uid, command, strength, duration) {
+async function sendCommand(uid, command, strength, duration, directSocket = null) {
     if (!process.env.LOVENSE_DEVELOPER_TOKEN) {
-        console.error('[CRITICAL] LOVENSE_DEVELOPER_TOKEN is not set in environment variables!');
+        const err = 'LOVENSE_DEVELOPER_TOKEN is missing in Railway variables!';
+        console.error(`[CRITICAL] ${err}`);
+        if (directSocket) directSocket.emit('api-feedback', { success: false, message: err });
         return;
     }
 
     try {
         const host = await prisma.host.findUnique({ where: { uid } });
 
-        // If we don't have toy info, we try a broadcast command (no toyId)
         if (!host || !host.toys) {
             console.log(`[LOVENSE] No toy metadata for ${uid}, sending broadcast command.`);
-            return await dispatchRaw(uid, null, 'vibrate', strength, duration);
+            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
         }
 
         const toyList = JSON.parse(host.toys);
-        const commands = [];
-
-        // Handle both Array and Object formats from Lovense
         const toys = Array.isArray(toyList) ? toyList : Object.values(toyList);
+        const commands = [];
 
         for (const toy of toys) {
             const tId = toy.id || toy.toyId;
             const name = (toy.name || '').toLowerCase();
             const type = (toy.type || '').toLowerCase();
 
-            // Skip simulated toys if we have real ones
             if (tId === 'SIM' && toys.length > 1) continue;
-
             const targetToyId = tId === 'SIM' ? null : tId;
 
-            // Vibrate is universal
-            commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration));
+            commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration, directSocket));
 
-            // Osci specific: uses 'oscillate'
             if (name.includes('osci') || type.includes('osci')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'oscillate', Math.ceil(strength / 2), duration));
+                commands.push(dispatchRaw(uid, targetToyId, 'oscillate', strength, duration, directSocket));
             }
-
-            // Nora specific: uses 'rotate'
             if (name.includes('nora') || type.includes('nora')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
+                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration, directSocket));
             }
 
             if (name.includes('max') || type.includes('max')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration));
+                commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration, directSocket));
             }
         }
 
         await Promise.all(commands);
+        if (directSocket) directSocket.emit('incoming-pulse', { source: 'test', level: strength });
     } catch (error) {
         console.error('[LOVENSE] Error in command mapping:', error.message);
     }
 }
 
-async function dispatchRaw(uid, toyId, command, strength, duration) {
+async function dispatchRaw(uid, toyId, command, strength, duration, directSocket = null) {
     const apiUrls = [
         'https://api.lovense.com/api/standard/v1/command',
         'https://api.lovense-api.com/api/standard/v1/command'
@@ -373,13 +375,16 @@ async function dispatchRaw(uid, toyId, command, strength, duration) {
             console.log(`[LOVENSE] Dispatching ${command}:${strength} to ${uid} via ${url.split('/')[2]}`);
             const response = await axios.post(url, payload, { timeout: 5000 });
 
-            // Send feedback to the frontend
-            io.to(`host:${uid}`).emit('api-feedback', {
+            const feedback = {
                 success: response.data.result,
                 message: response.data.message || (response.data.result ? 'OK' : 'Error'),
                 code: response.data.code,
                 url: url.split('/')[2]
-            });
+            };
+
+            // Send feedback both to the room and directly to the socket
+            io.to(`host:${uid}`).emit('api-feedback', feedback);
+            if (directSocket) directSocket.emit('api-feedback', feedback);
 
             if (response.data && response.data.result) {
                 console.log(`[LOVENSE] Success:`, response.data.message || 'OK');

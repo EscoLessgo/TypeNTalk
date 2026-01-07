@@ -154,7 +154,12 @@ export default function HostView() {
 
     const testVibration = () => {
         if (status !== 'connected') return;
+        setApiFeedback({ success: true, message: 'SENDING...', url: 'local' });
         socket.emit('test-toy', { uid: customName });
+    };
+
+    const pingServer = () => {
+        socket.emit('ping-server');
     };
 
     const copyPairingCode = () => {
@@ -321,6 +326,12 @@ export default function HostView() {
                             </p>
                         </div>
 
+                        <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-left mb-8">
+                            <p className="text-[9px] text-purple-300 font-bold uppercase tracking-widest leading-relaxed">
+                                <Sparkles size={10} className="inline mr-1" /> Pro Tip: For Osci 3, ensure the toy is in "Game Mode" or "Remote Mode" inside the Lovense App for cloud sync to work.
+                            </p>
+                        </div>
+
                         <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
                             {/* Animated background energy for the status card */}
                             <motion.div
@@ -335,25 +346,32 @@ export default function HostView() {
                             <div className="w-16 h-16 bg-green-500/10 rounded-[1.5rem] flex items-center justify-center border border-green-500/10 z-10">
                                 <Shield className="text-green-500" size={32} />
                             </div>
-                            <div className="z-10">
+                            <div className="z-10 text-left">
                                 <h3 className="font-black text-2xl text-white tracking-tight">LINK SECURED</h3>
                                 <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase">
                                     {Object.keys(toys).length} Device(s) listening
                                 </p>
-                                <button
-                                    onClick={testVibration}
-                                    className="mt-2 text-[9px] bg-white/10 hover:bg-white/20 text-white/60 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
-                                >
-                                    Test Vibration
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={testVibration}
+                                        className="mt-2 text-[9px] bg-white/10 hover:bg-white/20 text-white/60 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
+                                    >
+                                        Test Vibration (Max)
+                                    </button>
+                                    <button
+                                        onClick={pingServer}
+                                        className="mt-2 text-[9px] bg-white/5 hover:bg-white/10 text-white/30 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
+                                    >
+                                        Ping Server
+                                    </button>
+                                </div>
                                 {apiFeedback && (
                                     <motion.div
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         className={`mt-2 text-[8px] font-black uppercase tracking-widest ${apiFeedback.success ? 'text-green-500' : 'text-red-500'}`}
                                     >
-                                        {apiFeedback.success ? '✓ TOY RESPONDED' : `✗ ERROR: ${apiFeedback.message}`}
-                                        {!apiFeedback.success && apiFeedback.code && <span className="ml-1 opacity-50">({apiFeedback.code})</span>}
+                                        {apiFeedback.success ? `✓ ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
                                     </motion.div>
                                 )}
                             </div>
