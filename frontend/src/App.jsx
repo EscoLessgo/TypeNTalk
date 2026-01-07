@@ -26,8 +26,14 @@ function App() {
           <Routes>
             <Route path="/" element={<HostView />} />
             <Route path="/t/:slug" element={<TypistView />} />
-            {/* Catch-all for invalid URLs - redirects to home */}
-            <Route path="*" element={<div className="text-center p-20 animate-pulse text-white/20 uppercase tracking-[0.5em] text-[10px]">Invalid Route. Redirecting...{setTimeout(() => window.location.href = '/', 2000)}</div>} />
+            {/* Catch-all for invalid URLs - shows a message with a manual link */}
+            <Route path="*" element={
+              <div className="text-center p-20 space-y-6">
+                <div className="text-white/20 uppercase tracking-[0.5em] text-[10px]">Route Not Found</div>
+                <h2 className="text-2xl font-bold text-white italic">LOST IN SPACE</h2>
+                <Link to="/" className="button-premium inline-block">Return to Home</Link>
+              </div>
+            } />
           </Routes>
         </main>
 
