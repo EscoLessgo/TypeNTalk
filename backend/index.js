@@ -61,6 +61,8 @@ app.get('/health', (req, res) => {
 });
 
 const qrCache = new Map();
+const presets = new Map(); // uid -> interval
+const baseFloors = new Map(); // uid -> level
 
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
@@ -236,6 +238,55 @@ io.on('connection', (socket) => {
         io.to(`typist:${slug}`).emit('approval-status', { approved });
     });
 
+    socket.on('host-feedback', ({ uid, type, slug }) => {
+        console.log(`[FEEDBACK] Host ${uid} sent ${type} to typist ${slug}`);
+        io.to(`typist:${slug}`).emit('host-feedback', { type });
+    });
+
+    socket.on('set-base-floor', ({ uid, level }) => {
+        console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
+        baseFloors.set(uid, parseInt(level));
+        // Trigger one pulse to show/test
+        sendCommand(uid, 'vibrate', Math.floor(parseInt(level) / 5), 1);
+    });
+
+    socket.on('set-preset', ({ uid, preset }) => {
+        console.log(`[PRESET] Host ${uid} set preset to ${preset}`);
+
+        // Clear existing preset for this host
+        if (presets.has(uid)) {
+            clearInterval(presets.get(uid));
+            presets.delete(uid);
+        }
+
+        // Emit to all typists for this host
+        // We'd need a lookup for slug, but for now we'll just broadcast or rely on client state
+        // In a real app we'd find the connection
+
+        if (preset === 'none') {
+            io.emit('preset-update', { uid, preset: 'none' }); // Simplified broadcast
+            return;
+        }
+
+        io.emit('preset-update', { uid, preset });
+
+        const interval = setInterval(() => {
+            let strength = 0;
+            if (preset === 'pulse') {
+                strength = 5;
+            } else if (preset === 'wave') {
+                strength = Math.floor(Math.sin(Date.now() / 1000) * 5 + 10);
+            } else if (preset === 'chaos') {
+                strength = Math.floor(Math.random() * 15 + 5);
+            }
+
+            sendCommand(uid, 'vibrate', strength, 1);
+            io.to(`host:${uid}`).emit('incoming-pulse', { source: 'preset', level: strength });
+        }, 2000);
+
+        presets.set(uid, interval);
+    });
+
     socket.on('typing-update', async ({ slug, text }) => {
         const conn = await prisma.connection.findUnique({
             where: { slug },
@@ -326,6 +377,8 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        // Clean up presets if host disconnects?
+        // Actually host might just be refreshing.
     });
 });
 
@@ -339,10 +392,12 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
 
     try {
         const host = await prisma.host.findUnique({ where: { uid } });
+        const floor = baseFloors.get(uid) || 0;
+        const finalStrength = Math.max(strength, Math.floor(floor / 5)); // Strength is 0-20, floor is 0-100
 
         if (!host || !host.toys) {
             console.log(`[LOVENSE] No toy metadata for ${uid}, sending broadcast command.`);
-            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
+            return await dispatchRaw(uid, null, 'vibrate', finalStrength, duration, directSocket);
         }
 
         const toyList = JSON.parse(host.toys);
@@ -355,7 +410,7 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
             const targetToyId = tId === 'SIM' ? null : tId;
 
             // Simplified: Only send Vibrate. Shotgunning 4 commands per keypress causes instant rate-limiting.
-            commands.push(dispatchRaw(uid, targetToyId, 'Vibrate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'Vibrate', finalStrength, duration, directSocket));
         }
 
         await Promise.all(commands);

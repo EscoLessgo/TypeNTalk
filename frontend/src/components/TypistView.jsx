@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
 import { useParams } from 'react-router-dom';
-import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check, HelpCircle, X, Lock, Eye } from 'lucide-react';
+import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check, HelpCircle, X, Lock, Eye, ThumbsUp, ThumbsDown, Activity } from 'lucide-react';
+import TypistAvatar from './ui/TypistAvatar';
+import PulseParticles from './ui/PulseParticles';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -28,6 +30,9 @@ export default function TypistView() {
     const [error, setError] = useState(null);
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [showGuide, setShowGuide] = useState(false);
+    const [intensity, setIntensity] = useState(0);
+    const [hostFeedback, setHostFeedback] = useState(null);
+    const [activePreset, setActivePreset] = useState('none');
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -51,10 +56,21 @@ export default function TypistView() {
             setStatus(approved ? 'connected' : 'denied');
         });
 
+        socket.on('host-feedback', (data = {}) => {
+            setHostFeedback(data.type);
+            setTimeout(() => setHostFeedback(null), 5000);
+        });
+
+        socket.on('preset-update', (data = {}) => {
+            setActivePreset(data.preset);
+        });
+
         return () => {
             socket.off('connect');
             socket.off('disconnect');
             socket.off('approval-status');
+            socket.off('host-feedback');
+            socket.off('preset-update');
             stopMic();
         };
     }, [slug]);
@@ -108,6 +124,8 @@ export default function TypistView() {
         const now = Date.now();
         if (now - lastPulseRef.current > 100) { // Throttling
             socket.emit('typing-pulse', { slug, intensity: 9 });
+            setIntensity(60);
+            setTimeout(() => setIntensity(0), 100);
             lastPulseRef.current = now;
         }
 
@@ -121,6 +139,8 @@ export default function TypistView() {
         if (!text.trim()) return;
         const pulses = [{ time: 0, intensity: 20, duration: 3 }];
         socket.emit('final-surge', { slug, text, pulses });
+        setIntensity(100);
+        setTimeout(() => setIntensity(0), 3000);
         setText('');
     };
 
@@ -196,6 +216,7 @@ export default function TypistView() {
         }
 
         setMicLevel(normalized);
+        setIntensity(normalized * 5); // 20 intensity -> 100 visual
 
         // Send pulse if level is significant (Gate check)
         if (normalized >= 4) {
@@ -354,6 +375,20 @@ export default function TypistView() {
                     <span className="font-black text-xs uppercase tracking-widest text-white/80 italic">Controlling <span className="text-pink-500">{hostName}</span></span>
                 </div>
                 <div className="flex items-center gap-4">
+                    <AnimatePresence>
+                        {hostFeedback && (
+                            <motion.div
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-2xl border-2 ${hostFeedback === 'good' ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-red-500/20 border-red-500/50 text-red-400'}`}
+                            >
+                                {hostFeedback === 'good' ? <ThumbsUp size={16} /> : <ThumbsDown size={16} />}
+                                <span className="text-[10px] font-black uppercase tracking-widest">{hostFeedback === 'good' ? 'SHE LOVES IT' : 'TOO MUCH / PAUSE'}</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     <button
                         onClick={toggleMic}
                         className={`p-3 rounded-2xl transition-all border ${isMicOn ? 'bg-pink-500/20 text-pink-400 border-pink-500/40 kinky-glow' : 'bg-white/5 text-white/40 border-white/5'}`}
@@ -372,67 +407,63 @@ export default function TypistView() {
                 </div>
             </div>
 
-            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-500 ${micLevel > 5 ? 'border-pink-500/40 bg-pink-500/[0.03]' : 'border-white/10'}`}>
+            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-500 ${micLevel > 5 || intensity > 30 ? 'border-pink-500/40 bg-pink-500/[0.03]' : 'border-white/10'}`}>
                 {/* Dynamic Background Glow */}
+                <PulseParticles intensity={intensity || micLevel * 5} />
+
                 <motion.div
                     className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10"
                     animate={{
-                        opacity: micLevel > 0 ? 0.4 : 0.1,
-                        scale: micLevel > 5 ? 1.05 : 1
+                        opacity: (micLevel > 0 || intensity > 0) ? 0.4 : 0.1,
+                        scale: (micLevel > 5 || intensity > 50) ? 1.05 : 1
                     }}
                 />
 
-                <AnimatePresence>
-                    {ripples.map(r => (
-                        <motion.div
-                            key={r.id}
-                            initial={{ scale: 0, opacity: 0.6 }}
-                            animate={{ scale: 6, opacity: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute rounded-full bg-purple-500/20 pointer-events-none border border-purple-500/10"
-                            style={{
-                                left: `${r.x}%`,
-                                top: `${r.y}%`,
-                                width: '100px',
-                                height: '100px',
-                                marginLeft: '-50px',
-                                marginTop: '-50px'
-                            }}
-                        />
-                    ))}
-                </AnimatePresence>
-
-                <textarea
-                    className="w-full flex-grow bg-transparent text-2xl font-bold placeholder:text-white/5 resize-none focus:outline-none leading-relaxed z-10 text-white shadow-none border-none outline-none appearance-none"
-                    placeholder="TYPE HERE TO SYNC VIBRATIONS..."
-                    value={text}
-                    onChange={(e) => {
-                        setText(e.target.value);
-                        socket.emit('typing-update', { slug, text: e.target.value });
-                    }}
-                    onKeyDown={handleKeyDown}
-                />
-
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5 z-10">
-                    <div className="flex flex-col gap-2">
-                        <div className="flex gap-4 text-white/40 text-[10px] uppercase font-black tracking-[0.2em] italic">
-                            <span className="flex items-center gap-2"><Keyboard size={12} className="text-purple-400" /> KEYBOARD PULSE (9x)</span>
-                            <span className="flex items-center gap-2"><Mic size={12} className="text-pink-400" /> VOICE REACTIVE</span>
-                        </div>
+                <div className="relative z-10 flex flex-col h-full flex-grow">
+                    {/* Active Overlay: Avatar */}
+                    <div className="absolute top-0 right-0 p-4 opacity-50 scale-50 origin-top-right">
+                        <TypistAvatar intensity={intensity || micLevel * 5} lastAction={isMicOn ? 'voice' : 'typing'} />
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setShowGuide(true)}
-                            className="p-3 text-white/20 hover:text-white transition-colors"
-                        >
-                            <HelpCircle size={18} />
-                        </button>
-                        <button
-                            className="button-premium flex items-center gap-3 group px-12"
-                            onClick={sendSurge}
-                        >
-                            FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
-                        </button>
+
+                    <textarea
+                        className="w-full flex-grow bg-transparent text-2xl font-bold placeholder:text-white/5 resize-none focus:outline-none leading-relaxed z-10 text-white shadow-none border-none outline-none appearance-none pt-10"
+                        placeholder="TYPE HERE TO SYNC VIBRATIONS..."
+                        value={text}
+                        onChange={(e) => {
+                            setText(e.target.value);
+                            socket.emit('typing-update', { slug, text: e.target.value });
+                        }}
+                        onKeyDown={handleKeyDown}
+                    />
+
+                    <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5 z-10">
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-4 text-white/40 text-[10px] uppercase font-black tracking-[0.2em] italic">
+                                <span className="flex items-center gap-2">
+                                    <Keyboard size={12} className={intensity > 0 ? 'text-purple-400' : 'text-white/10'} />
+                                    PULSE: {intensity > 0 ? 'ACTIVE' : 'IDLE'}
+                                </span>
+                                {activePreset !== 'none' && (
+                                    <span className="flex items-center gap-2 text-pink-500 animate-pulse">
+                                        <Activity size={12} /> PRESET: {activePreset.toUpperCase()}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setShowGuide(true)}
+                                className="p-3 text-white/20 hover:text-white transition-colors"
+                            >
+                                <HelpCircle size={18} />
+                            </button>
+                            <button
+                                className="button-premium flex items-center gap-3 group px-12"
+                                onClick={sendSurge}
+                            >
+                                FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

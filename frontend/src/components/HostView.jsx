@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye } from 'lucide-react';
+import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye, Sliders, Volume2, VolumeX, RefreshCw, ThumbsUp, ThumbsDown, Activity } from 'lucide-react';
+import TypistAvatar from './ui/TypistAvatar';
+import PulseParticles from './ui/PulseParticles';
+import SessionHeatmap from './ui/SessionHeatmap';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -32,6 +35,14 @@ export default function HostView() {
     const [typingDraft, setTypingDraft] = useState('');
     const [apiFeedback, setApiFeedback] = useState(null);
     const [showGuide, setShowGuide] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [baseIntensity, setBaseIntensity] = useState(0);
+    const [sessionStartTime] = useState(Date.now());
+    const [sessionEvents, setSessionEvents] = useState([]);
+    const [activePreset, setActivePreset] = useState('none');
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [shouldShake, setShouldShake] = useState(false);
+    const audioRef = useRef(null);
 
 
     const customNameRef = useRef(customName);
@@ -71,8 +82,21 @@ export default function HostView() {
 
         socket.on('incoming-pulse', (data = {}) => {
             const { source, level } = data;
-            setIntensity(Math.min((level || 5) * 5, 100));
+            const finalLevel = isMuted ? 0 : Math.min((level || 5) * 5, 100);
+            setIntensity(finalLevel);
             setLastAction(source || 'active');
+
+            // Record event for heatmap
+            setSessionEvents(prev => [...prev, { timestamp: Date.now(), intensity: (level || 5) }]);
+
+            if (finalLevel > 80) {
+                setShouldShake(true);
+                setTimeout(() => setShouldShake(false), 300);
+            }
+
+            if (finalLevel > 40 && !isMuted) {
+                playSubtleSound();
+            }
 
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
         });
@@ -207,8 +231,35 @@ export default function HostView() {
         socket.emit('test-toy', { uid: customName });
     };
 
+    const sendFeedback = (type) => {
+        socket.emit('host-feedback', { uid: customName, type, slug });
+        // Visual feedback locally
+        setApiFeedback({ success: true, message: `Feedback Sent: ${type.toUpperCase()}` });
+        setTimeout(() => setApiFeedback(null), 3000);
+    };
+
+    const setPreset = (preset) => {
+        setActivePreset(preset);
+        socket.emit('set-preset', { uid: customName, preset });
+    };
+
+    const playSubtleSound = () => {
+        // Just a subtle click or hum
+        const osc = new (window.AudioContext || window.webkitAudioContext)().createOscillator();
+        const gain = osc.context.createGain();
+        osc.connect(gain);
+        gain.connect(osc.context.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, osc.context.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, osc.context.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, osc.context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, osc.context.currentTime + 0.1);
+        osc.start();
+        osc.stop(osc.context.currentTime + 0.1);
+    };
+
     return (
-        <div className="max-w-xl mx-auto space-y-8 pb-20 relative">
+        <div className={`max-w-xl mx-auto space-y-8 pb-20 relative transition-transform duration-75 ${shouldShake ? 'shake' : ''}`}>
             <AnimatePresence>
                 {showGuide && (
                     <>
@@ -472,6 +523,8 @@ export default function HostView() {
                         </div>
 
                         <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
+                            <PulseParticles intensity={intensity} />
+
                             <motion.div
                                 className="absolute inset-0 bg-green-500/5"
                                 animate={{
@@ -490,32 +543,111 @@ export default function HostView() {
                                     {Object.keys(toys).length} Device(s) Linked
                                 </p>
                             </div>
-                            <button
-                                onClick={testVibration}
-                                className="ml-auto z-10 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 text-[10px] font-black uppercase tracking-widest transition-all group active:scale-95 flex items-center gap-2"
-                            >
-                                <Zap size={14} className="group-hover:animate-pulse" />
-                                TEST HARDWARE
-                            </button>
+                            <div className="ml-auto z-10 flex gap-2">
+                                <button
+                                    onClick={() => sendFeedback('good')}
+                                    className="p-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-xl text-green-400 transition-all active:scale-95"
+                                    title="Good! Ramp up"
+                                >
+                                    <ThumbsUp size={18} />
+                                </button>
+                                <button
+                                    onClick={() => sendFeedback('bad')}
+                                    className="p-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 transition-all active:scale-95"
+                                    title="Too much / Pause"
+                                >
+                                    <ThumbsDown size={18} />
+                                </button>
+                                <button
+                                    onClick={testVibration}
+                                    className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 text-[10px] font-black uppercase tracking-widest transition-all group active:scale-95 flex items-center gap-2"
+                                >
+                                    <Zap size={14} className="group-hover:animate-pulse" />
+                                    SYNC TEST
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Avatar Visualization */}
+                        <TypistAvatar intensity={intensity} lastAction={lastAction} />
 
                         {/* Energy Meter */}
                         <div className="mb-10 space-y-3">
                             <div className="flex justify-between items-center px-1">
-                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Pulse Intensity</span>
+                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Live Pulse Meter</span>
                                 <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
-                                    {intensity > 0 ? (lastAction === 'voice' ? 'Voice Reactive' : 'Keystore Pulse') : 'Listening...'}
+                                    {intensity > 0 ? (lastAction === 'voice' ? 'Liquid Sync' : lastAction === 'surge' ? 'MAX SURGE' : 'Keystroke Pulse') : 'Waiting for input...'}
                                 </span>
                             </div>
-                            <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
+                            <div className="h-6 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1 relative">
                                 <motion.div
-                                    className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full"
+                                    className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full shadow-[0_0_20px_rgba(219,39,119,0.3)]"
                                     animate={{
                                         width: `${intensity}%`,
                                         opacity: intensity > 0 ? 1 : 0.3
                                     }}
                                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                 />
+
+                                {/* Screen Shake logic would be triggered by intensity > 80 */}
+                            </div>
+                        </div>
+
+                        {/* Session Heatmap */}
+                        <div className="mb-10">
+                            <SessionHeatmap events={sessionEvents} startTime={sessionStartTime} />
+                        </div>
+
+                        {/* Presets & Overrides */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+                            <div className="glass p-6 rounded-3xl space-y-4">
+                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest">
+                                    <Activity size={12} className="text-purple-400" /> Interaction Presets
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {['none', 'pulse', 'wave', 'chaos'].map(p => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPreset(p)}
+                                            className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${activePreset === p ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="glass p-6 rounded-3xl space-y-4">
+                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest">
+                                    <Sliders size={12} className="text-pink-400" /> Live Overrides
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Master Mute</span>
+                                        <button
+                                            onClick={() => setIsMuted(!isMuted)}
+                                            className={`p-2 rounded-lg transition-all ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white/20'}`}
+                                        >
+                                            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                            <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Base Floor</span>
+                                            <span className="text-[9px] font-mono text-purple-400">{baseIntensity}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0" max="100"
+                                            value={baseIntensity}
+                                            onChange={(e) => {
+                                                setBaseIntensity(e.target.value);
+                                                socket.emit('set-base-floor', { uid: customName, level: e.target.value });
+                                            }}
+                                            className="w-full accent-purple-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
