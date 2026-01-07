@@ -232,6 +232,13 @@ export default function HostView() {
                         >
                             2. CLICK TO SHOTGUN VIBRATE
                         </button>
+
+                        <button
+                            onClick={() => socket.emit('run-diagnostics', { uid: customName })}
+                            className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl active:scale-95 transition-all"
+                        >
+                            3. RUN TOY DIAGNOSTICS
+                        </button>
                     </div>
 
                     {apiFeedback && (

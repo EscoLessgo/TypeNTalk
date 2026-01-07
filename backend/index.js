@@ -236,9 +236,15 @@ io.on('connection', (socket) => {
         sendCommand(uid, 'vibrate', 20, 6, socket);
     });
 
-    socket.on('ping-server', () => {
-        console.log('[PING] Received ping request');
-        socket.emit('api-feedback', { success: true, message: 'PONG! YOU ARE CONNECTED TO VEROE SERVER.', url: 'server' });
+    socket.on('run-diagnostics', async ({ uid }) => {
+        const host = await prisma.host.findUnique({ where: { uid } });
+        if (!host || !host.toys) {
+            socket.emit('api-feedback', { success: false, message: 'DIAGNOSTICS: No toys linked to this ID yet. Scan the QR again!' });
+        } else {
+            const toys = JSON.parse(host.toys);
+            const toyNames = Array.isArray(toys) ? toys.map(t => t.name).join(', ') : Object.values(toys).map(t => t.name).join(', ');
+            socket.emit('api-feedback', { success: true, message: `DIAGNOSTICS: Server sees [${toyNames}]. Link is healthy.` });
+        }
     });
 
     // Real-time pulse from typing
@@ -332,11 +338,11 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
             if (tId === 'SIM' && toys.length > 1) continue;
             const targetToyId = tId === 'SIM' ? null : tId;
 
-            // Shotgun approach: Fire all possible motor types for complex toys like Osci 3
-            commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'oscillate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'rotate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration, directSocket));
+            // Shotgun approach: Fire all possible motor types with Capitalized commands
+            commands.push(dispatchRaw(uid, targetToyId, 'Vibrate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'Oscillate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'Rotate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'Pump', strength, duration, directSocket));
         }
 
         await Promise.all(commands);
