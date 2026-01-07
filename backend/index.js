@@ -54,20 +54,25 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
+const qrCache = new Map();
+
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
     const { username } = req.query;
     if (!username) return res.status(400).json({ error: 'Username required' });
 
+    // Return cached QR if available (expires in 10 mins)
+    const cached = qrCache.get(username);
+    if (cached && (Date.now() - cached.time < 600000)) {
+        console.log(`[LOVENSE] Using cached QR for ${username}`);
+        return res.json(cached.data);
+    }
+
     try {
-        const token = process.env.LOVENSE_DEVELOPER_TOKEN;
+        const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
 
         if (!token || token.length < 10) {
-            console.error('[CRITICAL] LOVENSE_DEVELOPER_TOKEN is missing or too short.');
-            return res.status(500).json({
-                error: 'LOVENSE_DEVELOPER_TOKEN is not configured.',
-                details: 'Please add your Developer Token to the Railway Environment Variables. The app cannot function without it.'
-            });
+            return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN missing.' });
         }
 
         const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
@@ -77,21 +82,21 @@ app.get('/api/lovense/qr', async (req, res) => {
             v: 2,
             apiVer: 1,
             type: 'standard'
-        });
+        }, { timeout: 10000 });
 
         if (response.data && response.data.result) {
+            qrCache.set(username, { data: response.data.data, time: Date.now() });
             res.json(response.data.data);
         } else {
+            console.error('[LOVENSE] API Error:', response.data);
             res.status(500).json({ error: 'Lovense API error', details: response.data });
         }
     } catch (error) {
         console.error('Error getting QR:', error.message);
-        if (error.response) {
-            console.error('Lovense API Response Error:', error.response.data);
-        }
+        const isRateLimit = error.message.includes('1015') || (error.response && error.response.status === 429);
         res.status(500).json({
-            error: 'Failed to get QR code from Lovense',
-            details: error.response?.data || error.message
+            error: isRateLimit ? 'RATE LIMITED BY CLOUDFLARE' : 'Failed to get QR code',
+            details: isRateLimit ? 'Please wait 5 minutes. Lovense has temporarily blocked us.' : error.message
         });
     }
 });
