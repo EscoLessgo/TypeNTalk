@@ -41,7 +41,7 @@ function App() {
     <ErrorBoundary>
       <Router>
         <div className="min-h-screen p-4 md:p-8">
-          <nav className="max-w-4xl mx-auto flex justify-between items-center mb-12">
+          <nav className="max-w-7xl mx-auto flex justify-between items-center mb-12">
             <Link to="/" className="flex items-center gap-3 group">
               <div className="p-2.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg shadow-purple-500/20 group-hover:rotate-12 transition-transform">
                 <Command className="text-white" size={24} />
@@ -60,7 +60,7 @@ function App() {
             </div>
           </nav>
 
-          <main className="max-w-4xl mx-auto">
+          <main className="max-w-7xl mx-auto">
             <Routes>
               <Route path="/" element={<HostView />} />
               <Route path="/t/:slug" element={<TypistView />} />

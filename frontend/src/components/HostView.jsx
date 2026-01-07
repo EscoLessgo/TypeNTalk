@@ -293,7 +293,7 @@ export default function HostView() {
     };
 
     return (
-        <div className={`max-w-xl mx-auto space-y-8 pb-20 relative transition-transform duration-75 ${shouldShake ? 'shake' : ''}`}>
+        <div className={`w-full mx-auto space-y-8 pb-20 relative transition-transform duration-75 ${shouldShake ? 'shake' : ''}`}>
             <AnimatePresence>
                 {showGuide && (
                     <>
@@ -434,225 +434,230 @@ export default function HostView() {
             </header>
 
             {status === 'setup' && (
-                <div className="glass p-10 rounded-[2.5rem] space-y-8 animate-in fade-in">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">I HAVE A TOY (HOST SETUP)</h2>
-                        <p className="text-xs text-white/40 uppercase tracking-widest leading-relaxed">
-                            Step 1: Enter your name, then you will scan a QR code with the **Lovense Connect** app.
-                        </p>
-                    </div>
+                <div className="max-w-xl mx-auto">
+                    <div className="glass p-10 rounded-[2.5rem] space-y-8 animate-in fade-in">
+                        <div className="text-center space-y-2">
+                            <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">I HAVE A TOY (HOST SETUP)</h2>
+                            <p className="text-xs text-white/40 uppercase tracking-widest leading-relaxed">
+                                Step 1: Enter your name, then you will scan a QR code with the **Lovense Connect** app.
+                            </p>
+                        </div>
 
-                    <div className="space-y-4">
-                        <input
-                            type="text"
-                            placeholder="YOUR NAME (E.G. ESCO)..."
-                            className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-2xl font-black focus:border-purple-500 outline-none uppercase transition-all placeholder:text-white/5"
-                            value={customName}
-                            onChange={(e) => setCustomName(e.target.value)}
-                            disabled={isLoading}
-                        />
+                        <div className="space-y-4">
+                            <input
+                                type="text"
+                                placeholder="YOUR NAME (E.G. ESCO)..."
+                                className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-2xl font-black focus:border-purple-500 outline-none uppercase transition-all placeholder:text-white/5"
+                                value={customName}
+                                onChange={(e) => setCustomName(e.target.value)}
+                                disabled={isLoading}
+                            />
 
-                        {error && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-2"
-                            >
-                                <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
-                                {error.details && (
-                                    <p className="text-[10px] opacity-50 lowercase font-mono">
-                                        {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
-                                    </p>
-                                )}
-                            </motion.div>
-                        )}
-                    </div>
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-2"
+                                >
+                                    <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
+                                    {error.details && (
+                                        <p className="text-[10px] opacity-50 lowercase font-mono">
+                                            {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
+                                        </p>
+                                    )}
+                                </motion.div>
+                            )}
+                        </div>
 
-                    <button
-                        onClick={startSession}
-                        disabled={isLoading}
-                        className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {isLoading ? (
-                            <div className="flex items-center gap-3">
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                CONNECTING...
-                            </div>
-                        ) : (
-                            <>START PAIRING <ArrowRight size={24} /></>
-                        )}
-                    </button>
-
-                    {isLoading && (
                         <button
-                            onClick={resetSession}
-                            className="w-full py-2 text-[9px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 transition-colors"
+                            onClick={startSession}
+                            disabled={isLoading}
+                            className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            Stuck? Cancel & Force Reset
+                            {isLoading ? (
+                                <div className="flex items-center gap-3">
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    CONNECTING...
+                                </div>
+                            ) : (
+                                <>START PAIRING <ArrowRight size={24} /></>
+                            )}
                         </button>
-                    )}
 
-                    <button
-                        onClick={() => setShowGuide(true)}
-                        className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <HelpCircle size={12} /> View Detailed Usage Instructions
-                    </button>
+                        {isLoading && (
+                            <button
+                                onClick={resetSession}
+                                className="w-full py-2 text-[9px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 transition-colors"
+                            >
+                                Stuck? Cancel & Force Reset
+                            </button>
+                        )}
+
+                        <button
+                            onClick={() => setShowGuide(true)}
+                            className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <HelpCircle size={12} /> View Detailed Usage Instructions
+                        </button>
+                    </div>
                 </div>
             )}
 
             {status === 'qr' && (
-                <div className="glass p-10 rounded-[2.5rem] flex flex-col items-center space-y-8 animate-in zoom-in-95">
-                    <div className="text-center space-y-2 w-full">
-                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">Step 2: Link Your Toy</h2>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
-                            Open the **LOVENSE CONNECT** app on your phone and SCAN this code
-                        </p>
-                        <p className="text-[8px] text-purple-400/60 uppercase tracking-tighter bg-purple-500/5 py-1 px-3 rounded-full inline-block">
-                            Osci 3 Compatible • Ensure toy is Bluetooth connected in the app
-                        </p>
-                    </div>
-
-                    <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-500/10">
-                        <img src={qrCode} alt="Lovense QR" className="w-[280px] h-[280px] object-contain" />
-                    </div>
-
-                    <div className="text-center space-y-6 w-full">
-                        <div
-                            onClick={copyPairingCode}
-                            className="relative cursor-pointer group w-full p-6 bg-purple-500/5 border-2 border-purple-500/20 rounded-3xl hover:bg-purple-500/10 transition-all text-center"
-                        >
-                            <p className="text-[10px] text-purple-400 uppercase tracking-widest font-black mb-1">Pairing Code</p>
-                            <p className="text-5xl font-mono font-black text-white tracking-widest flex items-center justify-center gap-4">
-                                {pairingCode}
-                                {copied ? <Check className="text-green-500" size={32} /> : <Copy className="text-white/10 group-hover:text-white/30" size={32} />}
+                <div className="max-w-xl mx-auto">
+                    <div className="glass p-10 rounded-[2.5rem] flex flex-col items-center space-y-8 animate-in zoom-in-95">
+                        <div className="text-center space-y-2 w-full">
+                            <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">Step 2: Link Your Toy</h2>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
+                                Open the **LOVENSE CONNECT** app on your phone and SCAN this code
                             </p>
-                            {copied && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-green-500 text-[10px] font-black uppercase tracking-widest">Code Copied!</span>}
+                            <p className="text-[8px] text-purple-400/60 uppercase tracking-tighter bg-purple-500/5 py-1 px-3 rounded-full inline-block">
+                                Osci 3 Compatible • Ensure toy is Bluetooth connected in the app
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3">
-                            <a
-                                href={`lovense://app/game?v=2&code=${pairingCode}`}
-                                target="_self"
-                                className="w-full py-5 bg-purple-600 text-white rounded-2xl text-xs font-black tracking-[0.3em] uppercase flex items-center justify-center gap-3 hover:bg-purple-500 transition-all"
+                        <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-500/10">
+                            <img src={qrCode} alt="Lovense QR" className="w-[280px] h-[280px] object-contain" />
+                        </div>
+
+                        <div className="text-center space-y-6 w-full">
+                            <div
+                                onClick={copyPairingCode}
+                                className="relative cursor-pointer group w-full p-6 bg-purple-500/5 border-2 border-purple-500/20 rounded-3xl hover:bg-purple-500/10 transition-all text-center"
                             >
-                                <Smartphone size={20} /> Open Lovense App
-                            </a>
-                            <button
-                                onClick={bypassHandshake}
-                                disabled={isLoading}
-                                className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30 disabled:opacity-50"
-                            >
-                                {isLoading ? 'BYPASSING...' : '⚠️ FORCE SKIP TO LINK (IF APP HANGS)'}
-                            </button>
-                            <button
-                                onClick={resetSession}
-                                className="w-full py-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-white transition-colors"
-                            >
-                                Wait, take me back to Step 1
-                            </button>
+                                <p className="text-[10px] text-purple-400 uppercase tracking-widest font-black mb-1">Pairing Code</p>
+                                <p className="text-5xl font-mono font-black text-white tracking-widest flex items-center justify-center gap-4">
+                                    {pairingCode}
+                                    {copied ? <Check className="text-green-500" size={32} /> : <Copy className="text-white/10 group-hover:text-white/30" size={32} />}
+                                </p>
+                                {copied && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-green-500 text-[10px] font-black uppercase tracking-widest">Code Copied!</span>}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3">
+                                <a
+                                    href={`lovense://app/game?v=2&code=${pairingCode}`}
+                                    target="_self"
+                                    className="w-full py-5 bg-purple-600 text-white rounded-2xl text-xs font-black tracking-[0.3em] uppercase flex items-center justify-center gap-3 hover:bg-purple-500 transition-all"
+                                >
+                                    <Smartphone size={20} /> Open Lovense App
+                                </a>
+                                <button
+                                    onClick={bypassHandshake}
+                                    disabled={isLoading}
+                                    className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30 disabled:opacity-50"
+                                >
+                                    {isLoading ? 'BYPASSING...' : '⚠️ FORCE SKIP TO LINK (IF APP HANGS)'}
+                                </button>
+                                <button
+                                    onClick={resetSession}
+                                    className="w-full py-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-white transition-colors"
+                                >
+                                    Wait, take me back to Step 1
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
             {status === 'connected' && (
-                <div className="space-y-6 animate-in fade-in zoom-in-95">
-                    <div className="glass p-10 rounded-[2.5rem] border-green-500/20 bg-green-500/[0.02]">
-                        <div className="text-center space-y-2 w-full mb-10">
-                            <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase text-green-500">Step 3: Invite Typist</h2>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
-                                Give this link to the person who will control you.
-                            </p>
-                        </div>
-
-                        <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-left mb-8">
-                            <p className="text-[9px] text-purple-300 font-bold uppercase tracking-widest leading-relaxed">
-                                <Sparkles size={10} className="inline mr-1" /> Pro Tip: For Osci 3, ensure the toy is in "Game Mode" or "Remote Mode" inside the Lovense App for cloud sync to work.
-                            </p>
-                        </div>
-
-                        <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
+                    {/* LEFT COLUMN: Visuals & Core Status */}
+                    <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+                        <div className="glass p-8 rounded-[2.5rem] border-green-500/20 bg-green-500/[0.02] relative overflow-hidden">
                             <PulseParticles intensity={intensity} />
+                            <div className="flex flex-col items-center text-center space-y-6 relative z-10">
+                                <div className="w-20 h-20 bg-green-500/10 rounded-3xl flex items-center justify-center border border-green-500/20">
+                                    <Shield className="text-green-500" size={40} />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-3xl text-white tracking-tight text-gradient">ACTIVE</h3>
+                                    <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase mt-1">
+                                        {Object.keys(toys).length} Device(s) Linked
+                                    </p>
+                                </div>
 
-                            <motion.div
-                                className="absolute inset-0 bg-green-500/5"
-                                animate={{
-                                    opacity: [0.05, 0.15, 0.05],
-                                    scale: [1, 1.05, 1]
-                                }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                            />
-
-                            <div className="w-16 h-16 bg-green-500/10 rounded-[1.5rem] flex items-center justify-center border border-green-500/10 z-10">
-                                <Shield className="text-green-500" size={32} />
-                            </div>
-                            <div className="z-10 text-left">
-                                <h3 className="font-black text-2xl text-white tracking-tight text-gradient">SESSION ACTIVE</h3>
-                                <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase">
-                                    {Object.keys(toys).length} Device(s) Linked
-                                </p>
-                            </div>
-                            <div className="ml-auto z-10 flex gap-2">
-                                <button
-                                    onClick={() => sendFeedback('good')}
-                                    className="p-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-xl text-green-400 transition-all active:scale-95"
-                                    title="Good! Ramp up"
-                                >
-                                    <ThumbsUp size={18} />
-                                </button>
-                                <button
-                                    onClick={() => sendFeedback('bad')}
-                                    className="p-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 transition-all active:scale-95"
-                                    title="Too much / Pause"
-                                >
-                                    <ThumbsDown size={18} />
-                                </button>
-                                <button
-                                    onClick={testVibration}
-                                    className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 text-[10px] font-black uppercase tracking-widest transition-all group active:scale-95 flex items-center gap-2"
-                                >
-                                    <Zap size={14} className="group-hover:animate-pulse" />
-                                    SYNC TEST
-                                </button>
+                                <div className="flex gap-2 w-full">
+                                    <button
+                                        onClick={() => sendFeedback('good')}
+                                        className="flex-1 py-4 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-2xl text-green-400 transition-all active:scale-95 flex items-center justify-center"
+                                    >
+                                        <ThumbsUp size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => sendFeedback('bad')}
+                                        className="flex-1 py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-2xl text-red-400 transition-all active:scale-95 flex items-center justify-center"
+                                    >
+                                        <ThumbsDown size={20} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         {/* Avatar Visualization */}
-                        <TypistAvatar intensity={intensity} lastAction={lastAction} />
+                        <div className="glass p-8 rounded-[2.5rem] flex flex-col items-center">
+                            <TypistAvatar intensity={intensity} lastAction={lastAction} />
 
-                        {/* Energy Meter */}
-                        <div className="mb-10 space-y-3">
-                            <div className="flex justify-between items-center px-1">
-                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Live Pulse Meter</span>
-                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
-                                    {intensity > 0 ? (lastAction === 'voice' ? 'Liquid Sync' : lastAction === 'surge' ? 'MAX SURGE' : 'Keystroke Pulse') : 'Waiting for input...'}
-                                </span>
-                            </div>
-                            <div className="h-6 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1 relative">
-                                <motion.div
-                                    className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full shadow-[0_0_20px_rgba(219,39,119,0.3)]"
-                                    animate={{
-                                        width: `${intensity}%`,
-                                        opacity: intensity > 0 ? 1 : 0.3
-                                    }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                />
-
-                                {/* Screen Shake logic would be triggered by intensity > 80 */}
+                            <div className="w-full space-y-3 mt-4">
+                                <div className="flex justify-between items-center px-1">
+                                    <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Live Pulse</span>
+                                    <span className={`text-[9px] font-black uppercase tracking-widest ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
+                                        {intensity > 0 ? lastAction : 'idle'}
+                                    </span>
+                                </div>
+                                <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5 relative">
+                                    <motion.div
+                                        className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full shadow-[0_0_15px_rgba(219,39,119,0.3)]"
+                                        animate={{ width: `${intensity}%`, opacity: intensity > 0 ? 1 : 0.3 }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Session Heatmap */}
-                        <div className="mb-10">
+                        <div className="glass p-6 rounded-3xl">
                             <SessionHeatmap events={sessionEvents} startTime={sessionStartTime} />
                         </div>
+                    </div>
 
-                        {/* Presets & Overrides */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+                    {/* RIGHT COLUMN: Controls, Link & Feeds */}
+                    <div className="lg:col-span-8 space-y-6">
+                        {/* Secret Link Section */}
+                        <div className="glass p-8 rounded-[2.5rem] border-purple-500/20 bg-purple-500/[0.02]">
+                            <div className="flex flex-col md:flex-row items-center gap-6">
+                                <div className="flex-1 space-y-2 text-center md:text-left">
+                                    <h2 className="text-xl font-black text-white italic uppercase tracking-tight">Secret Link</h2>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-widest">Give this link to your partner.</p>
+                                    <code className="block mt-4 text-xs font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5">
+                                        {window.location.host}/t/{slug}
+                                    </code>
+                                </div>
+                                <div className="flex flex-col gap-2 w-full md:w-auto min-w-[200px]">
+                                    <button
+                                        className="w-full button-premium py-4 rounded-xl text-xs"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}/t/${slug}`);
+                                            setCopied(true);
+                                            setTimeout(() => setCopied(false), 2000);
+                                        }}
+                                    >
+                                        {copied ? 'COPIED!' : 'COPY LINK'}
+                                    </button>
+                                    <button
+                                        onClick={testVibration}
+                                        className="w-full py-3 border border-purple-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Zap size={14} /> SYNC TEST
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Presets */}
                             <div className="glass p-6 rounded-3xl space-y-4">
-                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest">
-                                    <Activity size={12} className="text-purple-400" /> Interaction Presets
+                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest leading-none">
+                                    <Activity size={12} className="text-purple-400" /> Presets
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     {['none', 'pulse', 'wave', 'chaos'].map(p => (
@@ -667,9 +672,10 @@ export default function HostView() {
                                 </div>
                             </div>
 
+                            {/* Overrides */}
                             <div className="glass p-6 rounded-3xl space-y-4">
-                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest">
-                                    <Sliders size={12} className="text-pink-400" /> Live Overrides
+                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest leading-none">
+                                    <Sliders size={12} className="text-pink-400" /> Overrides
                                 </div>
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -701,75 +707,37 @@ export default function HostView() {
                             </div>
                         </div>
 
-                        {slug && (
-                            <div className="space-y-6">
-                                <div className="space-y-3">
-                                    <div className="p-8 rounded-[2rem] bg-white/5 border-2 border-white/5 flex flex-col items-center gap-6 group hover:border-purple-500/30 transition-all">
-                                        <code className="text-lg font-mono text-purple-400 font-bold select-all break-all text-center leading-relaxed">
-                                            {window.location.host}/t/{slug}
-                                        </code>
-                                        <button
-                                            className="w-full button-premium"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(`${window.location.origin}/t/${slug}`);
-                                                setCopied(true);
-                                                setTimeout(() => setCopied(false), 2000);
-                                            }}
-                                        >
-                                            {copied ? 'COPIED!' : 'COPY SECRET LINK'}
-                                        </button>
-                                        <button
-                                            onClick={testVibration}
-                                            className="w-full py-4 border-2 border-dashed border-purple-500/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Zap size={12} /> TEST MY VIBRATION
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-5 rounded-2xl bg-purple-500/5 text-center">
-                                    <p className="text-[9px] text-white/40 uppercase font-bold tracking-[0.2em] leading-relaxed">
-                                        Send this link to your partner. If you close this page, the connection will die. Keep it open in the background!
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                        {/* Feeds */}
+                        <div className="space-y-6">
+                            {/* Live Typist Feed */}
+                            <AnimatePresence>
+                                {typingDraft && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        className="glass p-8 rounded-[2.5rem] border-purple-500/30 bg-purple-500/[0.03] space-y-4"
+                                    >
+                                        <div className="flex items-center justify-between border-b border-purple-500/10 pb-4">
+                                            <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <Keyboard size={14} className="animate-pulse" /> Typist Thinking...
+                                            </h3>
+                                            <div className="flex gap-1">
+                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce" />
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-medium text-white/90 leading-relaxed italic">
+                                            {typingDraft}
+                                            <span className="w-2 h-6 bg-purple-500 inline-block ml-1 animate-pulse" />
+                                        </p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
-                    {/* Live Typist Feed */}
-                    <AnimatePresence>
-                        {typingDraft && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className="glass p-8 rounded-[2.5rem] border-purple-500/30 bg-purple-500/[0.03] space-y-4"
-                            >
-                                <div className="flex items-center justify-between border-b border-purple-500/10 pb-4">
-                                    <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <Keyboard size={14} className="animate-pulse" /> Live Typist Feed
-                                    </h3>
-                                    <div className="flex gap-1">
-                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce" />
-                                    </div>
-                                </div>
-                                <p className="text-2xl font-medium text-white/90 leading-relaxed italic">
-                                    {typingDraft}
-                                    <span className="w-2 h-6 bg-purple-500 inline-block ml-1 animate-pulse" />
-                                </p>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Live Message Stream */}
-                    <AnimatePresence>
-                        {messages.length > 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="glass p-8 rounded-[2.5rem] space-y-6"
-                            >
+                            {/* Recent Whispers */}
+                            <div className="glass p-8 rounded-[2.5rem] space-y-6">
                                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                                     <h3 className="text-sm font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
                                         <Sparkles size={16} className="text-purple-500" /> Recent Whispers
@@ -778,25 +746,31 @@ export default function HostView() {
                                 </div>
 
                                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {(messages || []).map((msg) => (
-                                        <motion.div
-                                            key={msg?.id || Math.random()}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all text-left"
-                                        >
-                                            <p className="text-lg text-white font-medium leading-relaxed">{msg?.text || ''}</p>
-                                            <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">
-                                                {msg?.timestamp instanceof Date
-                                                    ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                    : 'just now'}
-                                            </p>
-                                        </motion.div>
-                                    ))}
+                                    {messages.length === 0 ? (
+                                        <div className="text-center py-10 text-white/10 uppercase text-[10px] font-black tracking-widest">
+                                            Silence is waiting to be broken...
+                                        </div>
+                                    ) : (
+                                        (messages || []).map((msg) => (
+                                            <motion.div
+                                                key={msg?.id || Math.random()}
+                                                initial={{ opacity: 0, x: -20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all text-left"
+                                            >
+                                                <p className="text-lg text-white font-medium leading-relaxed">{msg?.text || ''}</p>
+                                                <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">
+                                                    {msg?.timestamp instanceof Date
+                                                        ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                        : 'just now'}
+                                                </p>
+                                            </motion.div>
+                                        ))
+                                    )}
                                 </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

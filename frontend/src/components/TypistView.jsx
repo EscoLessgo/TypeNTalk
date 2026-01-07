@@ -256,7 +256,7 @@ export default function TypistView() {
     );
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6 pb-20 relative">
+        <div className="max-w-5xl mx-auto space-y-6 pb-20 relative">
             <AnimatePresence>
                 {showGuide && (
                     <>
