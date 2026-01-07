@@ -308,6 +308,11 @@ async function sendCommand(uid, command, strength, duration) {
             if (name.includes('edge') || type === 'edge') {
                 // Edge has dual motors, vibrate usually hits both.
             }
+
+            if (name.includes('osci') || type.includes('osci')) {
+                // Osci has vibration and rotation
+                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
+            }
         }
 
         await Promise.all(commands);

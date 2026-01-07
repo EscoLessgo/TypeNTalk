@@ -158,16 +158,25 @@ export default function TypistView() {
         const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
         analyzerRef.current.getByteFrequencyData(dataArray);
 
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        const normalized = Math.min(Math.floor(average / 10), 20); // Scale to 0-20
+        // Focus on lower frequency bins where speech energy is concentrated (approx 0-2500Hz)
+        // Each bin is ~86Hz (for 44.1kHz). 30 bins covers ~2.5kHz.
+        let sum = 0;
+        const binCount = 30;
+        for (let i = 0; i < binCount; i++) {
+            sum += dataArray[i];
+        }
+
+        const average = sum / binCount;
+        // Increase sensitivity: average/5 instead of /10
+        const normalized = Math.min(Math.floor(average / 5), 20);
 
         setMicLevel(normalized);
 
         // Send pulse if level is significant
-        if (normalized > 3) {
+        if (normalized > 0) { // More sensitive threshold (was 3)
             const now = Date.now();
-            if (now - lastPulseRef.current > 150) {
-                socket.emit('voice-pulse', { slug, intensity: normalized });
+            if (now - lastPulseRef.current > 120) { // Slightly faster polling
+                socket.emit('voice-pulse', { slug, intensity: Math.max(normalized, 1) });
                 lastPulseRef.current = now;
             }
         }

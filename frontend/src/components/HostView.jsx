@@ -87,21 +87,26 @@ export default function HostView() {
     }, [customName]);
 
     const startSession = async () => {
-        const id = customName.trim().toLowerCase();
-        if (!id) {
+        const baseId = customName.trim().toLowerCase();
+        if (!baseId) {
             setError('Please enter your Lovense username');
             return;
         }
 
+        // Generate a slightly more unique ID to prevent collisions on the Lovense network
+        const uniqueId = `${baseId}_${Math.random().toString(36).substring(2, 6)}`;
+
         setIsLoading(true);
         setError(null);
         try {
-            socket.emit('join-host', id);
-            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${id}`);
+            socket.emit('join-host', uniqueId);
+            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uniqueId}`);
             if (res.data && res.data.qr) {
                 setQrCode(res.data.qr);
                 setPairingCode(res.data.code);
                 setStatus('qr');
+                // Store the unique ID for later
+                setCustomName(uniqueId);
             } else {
                 setError('Unexpected response from server');
             }
@@ -119,6 +124,11 @@ export default function HostView() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const testVibration = () => {
+        if (status !== 'connected') return;
+        socket.emit('typing-pulse', { slug, intensity: 10 });
     };
 
     const copyPairingCode = () => {
@@ -234,6 +244,9 @@ export default function HostView() {
                         <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
                             Scan with Lovense Remote OR Copy Code to Lovense Connect
                         </p>
+                        <p className="text-[8px] text-purple-400/60 uppercase tracking-tighter bg-purple-500/5 py-1 px-3 rounded-full inline-block">
+                            Osci 3 Compatible • Ensure toy is Bluetooth paired to app
+                        </p>
                     </div>
 
                     <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-500/10">
@@ -301,6 +314,12 @@ export default function HostView() {
                                 <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase">
                                     {Object.keys(toys).length} Device(s) listening
                                 </p>
+                                <button
+                                    onClick={testVibration}
+                                    className="mt-2 text-[9px] bg-white/10 hover:bg-white/20 text-white/60 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
+                                >
+                                    Test Vibration
+                                </button>
                             </div>
                         </div>
 
