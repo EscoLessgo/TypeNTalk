@@ -138,9 +138,17 @@ export default function HostView() {
             console.log('[SESSION] Restoring host session:', savedUid);
             setCustomName(savedUid);
             socket.emit('join-host', savedUid);
-            createLink(savedUid);
-            setStatus('connected');
-            // Note: We don't have toy metadata here, but the server does if it was linked.
+
+            // Restore session silently
+            const restore = async () => {
+                setIsLoading(true);
+                await createLink(savedUid);
+                if (slugRef.current) {
+                    setStatus('connected');
+                }
+                setIsLoading(false);
+            };
+            restore();
         }
     }, [isSocketConnected, status]);
 
@@ -163,7 +171,7 @@ export default function HostView() {
         setError(null);
         try {
             socket.emit('join-host', uniqueId);
-            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uniqueId}`);
+            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uniqueId}`, { timeout: 8000 });
             if (res.data && res.data.qr) {
                 setQrCode(res.data.qr);
                 setPairingCode(res.data.code);
@@ -210,20 +218,28 @@ export default function HostView() {
             // We set mock toys for simulation
             setToys({ 'SIM': { name: 'SIMULATED DEVICE', type: 'Vibrate' } });
             await createLink(id);
-            setStatus('connected');
+            if (slugRef.current) {
+                setStatus('connected');
+            } else {
+                throw new Error('Could not establish connection link. Backend might be down.');
+            }
         } catch (err) {
-            setError('Failed to enter test mode');
+            console.error('Bypass handshanke error:', err);
+            setError(err.message || 'Failed to enter test mode');
         } finally {
             setIsLoading(false);
         }
     };
 
+    const slugRef = useRef('');
     const createLink = async (uid) => {
         try {
-            const res = await axios.post(`${API_BASE}/api/connections/create`, { uid });
+            const res = await axios.post(`${API_BASE}/api/connections/create`, { uid }, { timeout: 8000 });
             setSlug(res.data.slug);
+            slugRef.current = res.data.slug;
         } catch (err) {
-            console.error(err);
+            console.error('[API] createLink error:', err);
+            setError(`Link Creation Failed: ${err.response?.data?.error || err.message}`);
         }
     };
 
@@ -497,9 +513,16 @@ export default function HostView() {
                             </a>
                             <button
                                 onClick={bypassHandshake}
-                                className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30"
+                                disabled={isLoading}
+                                className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30 disabled:opacity-50"
                             >
-                                ⚠️ FORCE SKIP TO LINK (IF APP HANGS)
+                                {isLoading ? 'BYPASSING...' : '⚠️ FORCE SKIP TO LINK (IF APP HANGS)'}
+                            </button>
+                            <button
+                                onClick={resetSession}
+                                className="w-full py-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-white transition-colors"
+                            >
+                                Wait, take me back to Step 1
                             </button>
                         </div>
                     </div>

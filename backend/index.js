@@ -56,8 +56,13 @@ app.get('/', (req, res) => {
     res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
 });
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+app.get('/health', async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: 'ok', database: 'connected', timestamp: new Date() });
+    } catch (err) {
+        res.status(503).json({ status: 'unhealthy', database: 'disconnected', error: err.message });
+    }
 });
 
 const qrCache = new Map();
@@ -135,57 +140,67 @@ app.post('/api/lovense/callback', async (req, res) => {
 
 // Create Connection Link
 app.post('/api/connections/create', async (req, res) => {
-    const { uid } = req.body; // uid is the host's Lovense UID
-    if (!uid) return res.status(400).json({ error: 'Host UID required' });
+    try {
+        const { uid } = req.body; // uid is the host's Lovense UID
+        if (!uid) return res.status(400).json({ error: 'Host UID required' });
 
-    // Ensure the host exists in our DB (especially important for 'Skip To Link' flow)
-    const host = await prisma.host.upsert({
-        where: { uid },
-        update: { username: uid },
-        create: { uid, username: uid }
-    });
+        // Ensure the host exists in our DB (especially important for 'Skip To Link' flow)
+        const host = await prisma.host.upsert({
+            where: { uid: uid },
+            update: { username: uid },
+            create: { uid: uid, username: uid }
+        });
 
-    // Check for an existing recent connection to prevent link-shuffling
-    const existing = await prisma.connection.findFirst({
-        where: { hostId: host.id },
-        orderBy: { createdAt: 'desc' }
-    });
+        // Check for an existing recent connection to prevent link-shuffling
+        const existing = await prisma.connection.findFirst({
+            where: { hostId: host.id },
+            orderBy: { createdAt: 'desc' }
+        });
 
-    if (existing && !existing.approved) {
-        return res.json({ slug: existing.slug });
-    }
-
-    const slug = uuidv4().substring(0, 8);
-    const connection = await prisma.connection.create({
-        data: {
-            slug,
-            hostId: host.id,
-            approved: false
+        if (existing && !existing.approved) {
+            return res.json({ slug: existing.slug });
         }
-    });
 
-    res.json({ slug });
+        const slug = uuidv4().substring(0, 8);
+        const connection = await prisma.connection.create({
+            data: {
+                slug,
+                hostId: host.id,
+                approved: false
+            }
+        });
+
+        res.json({ slug });
+    } catch (err) {
+        console.error('[API] Create connection error:', err);
+        res.status(500).json({ error: 'Database error', details: err.message });
+    }
 });
 
 // Get Connection Status
 app.get('/api/connections/:slug', async (req, res) => {
-    const connection = await prisma.connection.findUnique({
-        where: { slug: req.params.slug },
-        include: { host: true }
-    });
+    try {
+        const connection = await prisma.connection.findUnique({
+            where: { slug: req.params.slug },
+            include: { host: true }
+        });
 
-    if (!connection) return res.status(404).json({ error: 'Link invalid' });
+        if (!connection) return res.status(404).json({ error: 'Link invalid' });
 
-    // Parse JSON fields
-    if (connection.host.toys) connection.host.toys = JSON.parse(connection.host.toys);
-    if (connection.history) {
-        connection.history = connection.history.map(h => ({
-            ...h,
-            pulses: h.pulses ? JSON.parse(h.pulses) : []
-        }));
+        // Parse JSON fields
+        if (connection.host.toys) connection.host.toys = JSON.parse(connection.host.toys);
+        if (connection.history) {
+            connection.history = connection.history.map(h => ({
+                ...h,
+                pulses: h.pulses ? JSON.parse(h.pulses) : []
+            }));
+        }
+
+        res.json(connection);
+    } catch (err) {
+        console.error('[API] Get connection error:', err);
+        res.status(500).json({ error: 'Database error', details: err.message });
     }
-
-    res.json(connection);
 });
 
 // Favorite a response

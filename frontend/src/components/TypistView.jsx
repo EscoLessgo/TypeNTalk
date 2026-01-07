@@ -85,7 +85,7 @@ export default function TypistView() {
 
         console.log(`[TYPIST] Checking slug: ${cleanSlug}`);
         try {
-            const res = await axios.get(`${API_BASE}/api/connections/${cleanSlug}`);
+            const res = await axios.get(`${API_BASE}/api/connections/${cleanSlug}`, { timeout: 8000 });
             console.log(`[TYPIST] Connection data received:`, res.data);
 
             if (!res.data || !res.data.host) {
@@ -166,7 +166,10 @@ export default function TypistView() {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) throw new Error('Web Audio API not supported');
+
+            audioContextRef.current = new AudioContext();
             const source = audioContextRef.current.createMediaStreamSource(stream);
             const analyzer = audioContextRef.current.createAnalyser();
             analyzer.fftSize = 512;
@@ -178,7 +181,7 @@ export default function TypistView() {
             requestAnimationFrame(processAudio);
         } catch (err) {
             console.error('Mic access denied', err);
-            alert('Enable mic access to use voice sync');
+            setError(`Mic Error: ${err.message}`);
         }
     };
 
