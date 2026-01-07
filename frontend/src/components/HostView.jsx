@@ -185,6 +185,10 @@ export default function HostView() {
         }
     };
 
+    const testVibration = () => {
+        socket.emit('test-toy', { uid: customName });
+    };
+
     return (
         <div className="max-w-xl mx-auto space-y-8 pb-20 relative">
             <AnimatePresence>
@@ -468,6 +472,13 @@ export default function HostView() {
                                     {Object.keys(toys).length} Device(s) Linked
                                 </p>
                             </div>
+                            <button
+                                onClick={testVibration}
+                                className="ml-auto z-10 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 text-[10px] font-black uppercase tracking-widest transition-all group active:scale-95 flex items-center gap-2"
+                            >
+                                <Zap size={14} className="group-hover:animate-pulse" />
+                                TEST HARDWARE
+                            </button>
                         </div>
 
                         {/* Energy Meter */}
