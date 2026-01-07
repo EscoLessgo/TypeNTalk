@@ -273,9 +273,9 @@ export default function HostView() {
             {status === 'setup' && (
                 <div className="glass p-10 rounded-[2.5rem] space-y-8 animate-in fade-in">
                     <div className="text-center space-y-2">
-                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4">DEVICE OWNER SETUP</h2>
+                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">I HAVE A TOY (HOST SETUP)</h2>
                         <p className="text-xs text-white/40 uppercase tracking-widest leading-relaxed">
-                            Step 1: Enter your name to identify your toy on the network.
+                            Step 1: Enter your name, then you will scan a QR code with the **Lovense Connect** app.
                         </p>
                     </div>
 
@@ -325,12 +325,12 @@ export default function HostView() {
             {status === 'qr' && (
                 <div className="glass p-10 rounded-[2.5rem] flex flex-col items-center space-y-8 animate-in zoom-in-95">
                     <div className="text-center space-y-2 w-full">
-                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">Step 2: Connect Toy</h2>
+                        <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">Step 2: Link Your Toy</h2>
                         <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
-                            Scan with Lovense Remote OR Copy Code to Lovense Connect
+                            Open the **LOVENSE CONNECT** app on your phone and SCAN this code
                         </p>
                         <p className="text-[8px] text-purple-400/60 uppercase tracking-tighter bg-purple-500/5 py-1 px-3 rounded-full inline-block">
-                            Osci 3 Compatible • Ensure toy is Bluetooth paired to app
+                            Osci 3 Compatible • Ensure toy is Bluetooth connected in the app
                         </p>
                     </div>
 
