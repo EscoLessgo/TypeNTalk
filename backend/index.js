@@ -64,14 +64,16 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', async (req, res) => {
+    const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
     try {
         await prisma.$queryRaw`SELECT 1`;
-        res.json({ status: 'ok', database: 'connected', timestamp: new Date() });
+        res.json({ status: 'ok', database: 'connected', lovense: token ? 'SET' : 'MISSING', timestamp: new Date() });
     } catch (err) {
         res.status(200).json({
             status: 'warning',
             database: 'disconnected',
             mode: 'IN-MEMORY-FALLBACK',
+            lovense: token ? 'SET' : 'MISSING',
             error: err.message,
             timestamp: new Date()
         });

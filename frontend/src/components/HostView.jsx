@@ -196,14 +196,13 @@ export default function HostView() {
         } catch (err) {
             console.error('Start session error:', err);
             const errorData = err.response?.data;
-            if (errorData && errorData.error) {
-                setError({
-                    message: errorData.error,
-                    details: errorData.details
-                });
-            } else {
-                setError(err.message || 'System error. Check your connection.');
-            }
+            const isRateLimit = errorData?.error?.includes('RATE LIMIT') || err.message?.includes('429');
+
+            setError({
+                message: isRateLimit ? 'LOVENSE RATE LIMIT: Please wait 5 minutes before trying again.' : (errorData?.error || err.message || 'System error'),
+                details: errorData?.details || 'Lovense servers are temporarily rejecting new QR requests.',
+                showBypass: true
+            });
         } finally {
             setIsLoading(false);
         }
@@ -457,13 +456,29 @@ export default function HostView() {
                                 <motion.div
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-2"
+                                    className="bg-red-500/10 border border-red-500/20 p-5 rounded-2xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-4"
                                 >
-                                    <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
-                                    {error.details && (
-                                        <p className="text-[10px] opacity-50 lowercase font-mono">
-                                            {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
-                                        </p>
+                                    <div className="space-y-1">
+                                        <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
+                                        {error.details && (
+                                            <p className="text-[10px] opacity-50 lowercase font-mono">
+                                                {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {error.showBypass && (
+                                        <div className="pt-2 border-t border-red-500/10">
+                                            <p className="text-[9px] text-white/40 mb-3 leading-tight">
+                                                YOU CAN STILL USE THE APP WITHOUT A NEW QR IF YOUR TOY WAS PREVIOUSLY LINKED:
+                                            </p>
+                                            <button
+                                                onClick={bypassHandshake}
+                                                className="w-full py-3 bg-red-500/20 hover:bg-red-600/40 text-red-400 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border border-red-500/30"
+                                            >
+                                                Force Skip to Link Generation
+                                            </button>
+                                        </div>
                                     )}
                                 </motion.div>
                             )}
