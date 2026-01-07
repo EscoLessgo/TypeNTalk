@@ -131,6 +131,7 @@ export default function HostView() {
                 setStatus('qr');
                 // Store the unique ID for later
                 setCustomName(uniqueId);
+                localStorage.setItem('lovense_uid', uniqueId);
             } else {
                 setError('Unexpected response from server');
             }
@@ -151,15 +152,25 @@ export default function HostView() {
     };
 
     const testVibration = () => {
-        setApiFeedback({ success: true, message: 'LOCATING TOY...' });
-        console.log('[DEBUG] testVibration clicked with customName:', customName);
-        socket.emit('test-toy', { uid: customName });
+        const uid = localStorage.getItem('lovense_uid') || customName;
+        setApiFeedback({ success: true, message: `LOCATING TOY FOR ${uid}...` });
+        socket.emit('test-toy', { uid: uid });
     };
 
     const pingServer = () => {
-        console.log('[DEBUG] pingServer clicked');
         setApiFeedback({ success: true, message: 'WAITING FOR SERVER RESPONSE...' });
         socket.emit('ping-server');
+    };
+
+    const runDiagnostics = () => {
+        const uid = localStorage.getItem('lovense_uid') || customName;
+        setApiFeedback({ success: true, message: 'RUNNING DIAGNOSTICS...' });
+        socket.emit('run-diagnostics', { uid: uid });
+    };
+
+    const resetSession = () => {
+        localStorage.removeItem('lovense_uid');
+        window.location.reload();
     };
 
     const copyPairingCode = () => {
@@ -233,10 +244,17 @@ export default function HostView() {
                         </button>
 
                         <button
-                            onClick={() => socket.emit('run-diagnostics', { uid: customName })}
+                            onClick={runDiagnostics}
                             className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl active:scale-95 transition-all"
                         >
                             3. RUN TOY DIAGNOSTICS
+                        </button>
+
+                        <button
+                            onClick={resetSession}
+                            className="bg-white/5 hover:bg-white/10 text-white/20 text-[8px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-white/5 transition-all mt-4"
+                        >
+                            Reset Session
                         </button>
                     </div>
 

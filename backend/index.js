@@ -353,9 +353,11 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
 }
 
 async function dispatchRaw(uid, toyId, command, strength, duration, directSocket = null) {
+    // UPDATED ENDPOINTS: Lovense changed their API paths, which caused our 404 errors.
     const apiUrls = [
-        'https://api.lovense.com/api/standard/v1/command',
-        'https://api.lovense-api.com/api/standard/v1/command'
+        'https://api.lovense-api.com/api/lan/v2/command',
+        'https://api.lovense.com/api/lan/v2/command',
+        'https://api.lovense.com/api/lan/command'
     ];
 
     const payload = {
@@ -372,27 +374,23 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
     // Try primary, then secondary if needed
     for (const url of apiUrls) {
         try {
-            console.log(`[LOVENSE] Dispatching ${command}:${strength} to ${uid} via ${url.split('/')[2]}`);
-            const response = await axios.post(url, payload, { timeout: 5000 });
+            const domain = url.split('/')[2];
+            console.log(`[LOVENSE] Sending ${command}:${strength} to ${uid} via ${domain}`);
+            const response = await axios.post(url, payload, { timeout: 8000 });
+
+            const isSuccess = response.data.result === true || response.data.code === 200 || response.data.result === 'success';
 
             const feedback = {
-                success: response.data.result,
-                message: response.data.message || (response.data.result ? 'OK' : 'Error'),
+                success: isSuccess,
+                message: isSuccess ? `TOY RESPONDED OK (${domain})` : `API REJECTED: ${response.data.message || response.data.code}`,
                 code: response.data.code,
-                url: url.split('/')[2]
+                url: domain
             };
 
-            // Send feedback both to the room and directly to the socket
             io.to(`host:${uid}`).emit('api-feedback', feedback);
             if (directSocket) directSocket.emit('api-feedback', feedback);
 
-            if (response.data && response.data.result) {
-                console.log(`[LOVENSE] Success:`, response.data.message || 'OK');
-                return response.data;
-            } else {
-                console.warn(`[LOVENSE] API Warning from ${url.split('/')[2]}:`, response.data);
-                if (response.data.code === 401) break;
-            }
+            if (isSuccess) return response.data;
         } catch (e) {
             const errMsg = `NETWORK ERROR: ${e.message} (Is Lovense API down?)`;
             console.error(`[LOVENSE] Network error for ${url.split('/')[2]}:`, e.message);
