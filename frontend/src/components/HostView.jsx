@@ -210,11 +210,30 @@ export default function HostView() {
             </div>
 
             <header className="text-center space-y-2 pt-10">
-                <div className="bg-red-600 text-white text-[8px] font-black py-1 px-4 rounded-full inline-block mb-4 animate-pulse">DEBUG MODE: V2 LIVE</div>
+                <div className="bg-red-600 text-white text-[8px] font-black py-1 px-4 rounded-full inline-block mb-4 animate-pulse uppercase tracking-[0.2em]">DEBUG MODE: V2 LIVE</div>
                 <h1 className="text-6xl font-black tracking-tight text-white uppercase italic leading-none">
                     Veroe <span className="text-purple-500">Sync V2</span>
                 </h1>
-                <p className="text-white/30 font-bold uppercase tracking-[0.4em] text-[10px]">Cloud Toy Control Engine</p>
+                <p className="text-white/30 font-bold uppercase tracking-[0.4em] text-[10px] mb-6">Cloud Toy Control Engine</p>
+
+                <div className="flex flex-col items-center gap-4 py-4">
+                    <button
+                        onClick={pingServer}
+                        className="bg-white/10 hover:bg-white/20 text-white/40 text-[9px] font-black uppercase tracking-[0.3em] px-6 py-2 rounded-full border border-white/5 transition-all"
+                    >
+                        Test Server Connection (Ping)
+                    </button>
+
+                    {apiFeedback && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl glass ${apiFeedback.success ? 'text-green-500' : 'text-red-500'}`}
+                        >
+                            {apiFeedback.success ? `✓ ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
+                        </motion.div>
+                    )}
+                </div>
             </header>
 
             {status === 'setup' && (
@@ -359,22 +378,7 @@ export default function HostView() {
                                     >
                                         Test Vibration (Max)
                                     </button>
-                                    <button
-                                        onClick={pingServer}
-                                        className="mt-2 text-[9px] bg-white/5 hover:bg-white/10 text-white/30 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
-                                    >
-                                        Ping Server
-                                    </button>
                                 </div>
-                                {apiFeedback && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className={`mt-2 text-[8px] font-black uppercase tracking-widest ${apiFeedback.success ? 'text-green-500' : 'text-red-500'}`}
-                                    >
-                                        {apiFeedback.success ? `✓ ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
-                                    </motion.div>
-                                )}
                             </div>
                         </div>
 
