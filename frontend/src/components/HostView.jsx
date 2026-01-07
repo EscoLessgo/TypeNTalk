@@ -209,9 +209,10 @@ export default function HostView() {
                 </span>
             </div>
 
-            <header className="text-center space-y-2">
+            <header className="text-center space-y-2 pt-10">
+                <div className="bg-red-600 text-white text-[8px] font-black py-1 px-4 rounded-full inline-block mb-4 animate-pulse">DEBUG MODE: V2 LIVE</div>
                 <h1 className="text-6xl font-black tracking-tight text-white uppercase italic leading-none">
-                    Veroe <span className="text-purple-500">Sync</span>
+                    Veroe <span className="text-purple-500">Sync V2</span>
                 </h1>
                 <p className="text-white/30 font-bold uppercase tracking-[0.4em] text-[10px]">Cloud Toy Control Engine</p>
             </header>
