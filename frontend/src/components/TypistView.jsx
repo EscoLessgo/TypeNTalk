@@ -59,21 +59,38 @@ export default function TypistView() {
     }, [slug]);
 
     const checkSlug = async () => {
+        const cleanSlug = (slug || '').trim();
+        if (!cleanSlug) {
+            console.error('[TYPIST] No slug provided');
+            setStatus('invalid');
+            return;
+        }
+
+        console.log(`[TYPIST] Checking slug: ${cleanSlug}`);
         try {
-            const res = await axios.get(`${API_BASE}/api/connections/${slug}`);
+            const res = await axios.get(`${API_BASE}/api/connections/${cleanSlug}`);
+            console.log(`[TYPIST] Connection data received:`, res.data);
+
+            if (!res.data || !res.data.host) {
+                throw new Error('Malformed server response');
+            }
+
             setHostName(res.data.host.username);
             const favs = res.data.history?.filter(h => h.isFavorite) || [];
             setFavorites(favs);
 
             if (res.data.approved) {
+                console.log('[TYPIST] Status: connected');
                 setStatus('connected');
             } else {
+                console.log('[TYPIST] Status: waiting-approval');
                 setStatus('waiting-approval');
-                socket.emit('request-approval', { slug });
+                socket.emit('request-approval', { slug: cleanSlug });
             }
         } catch (err) {
-            console.error('Check link error:', err);
-            setError(err.response?.data?.error || 'Link invalid or server unreachable');
+            console.error('[TYPIST] Check link error:', err);
+            const errorMsg = err.response?.data?.error || err.message || 'Link invalid or server unreachable';
+            setError(errorMsg);
             setStatus('invalid');
         }
     };

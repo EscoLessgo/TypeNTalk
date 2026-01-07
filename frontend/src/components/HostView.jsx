@@ -32,22 +32,36 @@ export default function HostView() {
     const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
 
 
+    const customNameRef = useRef(customName);
     useEffect(() => {
-        const onConnect = () => setIsSocketConnected(true);
-        const onDisconnect = () => setIsSocketConnected(false);
+        customNameRef.current = customName;
+    }, [customName]);
+
+    useEffect(() => {
+        const onConnect = () => {
+            console.log('[SOCKET] Connected');
+            setIsSocketConnected(true);
+        };
+        const onDisconnect = () => {
+            console.log('[SOCKET] Disconnected');
+            setIsSocketConnected(false);
+        };
+
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         if (socket.connected) onConnect();
 
         socket.on('lovense:linked', (data = {}) => {
+            console.log('[SOCKET] Lovense linked received:', data);
             const { toys } = data;
             if (!toys) return;
             setToys(toys);
             setStatus('connected');
-            createLink(customName.trim().toLowerCase());
+            createLink(customNameRef.current.trim().toLowerCase());
         });
 
         socket.on('approval-request', (data = {}) => {
+            console.log('[SOCKET] Approval request:', data);
             const { slug: typistSlug } = data;
             if (!typistSlug) return;
             setTypists(prev => {
@@ -63,7 +77,6 @@ export default function HostView() {
             setIntensity(Math.min((level || 5) * 5, 100));
             setLastAction(source || 'active');
 
-            // Decay intensity over time
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
             setTimeout(() => setIncomingPulses(prev => prev.filter(p => p.id !== id)), 1000);
         });
@@ -72,7 +85,7 @@ export default function HostView() {
             const { text } = data;
             if (!text) return;
             setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
-            setIntensity(100); // Max blast on message
+            setIntensity(100);
             setTimeout(() => setIntensity(0), 1000);
         });
 
@@ -84,7 +97,7 @@ export default function HostView() {
             socket.off('incoming-pulse');
             socket.off('new-message');
         };
-    }, [customName]);
+    }, []); // Empty dependency array to prevent effect re-runs on name change
 
     const startSession = async () => {
         const baseId = customName.trim().toLowerCase();

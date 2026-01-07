@@ -26,6 +26,8 @@ function App() {
           <Routes>
             <Route path="/" element={<HostView />} />
             <Route path="/t/:slug" element={<TypistView />} />
+            {/* Catch-all for invalid URLs - redirects to home */}
+            <Route path="*" element={<div className="text-center p-20 animate-pulse text-white/20 uppercase tracking-[0.5em] text-[10px]">Invalid Route. Redirecting...{setTimeout(() => window.location.href = '/', 2000)}</div>} />
           </Routes>
         </main>
 
