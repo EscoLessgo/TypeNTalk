@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const TypistAvatar = ({ intensity, lastAction }) => {
     // intensity is 0-100
