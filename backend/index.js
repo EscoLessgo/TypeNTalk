@@ -331,18 +331,11 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
             if (tId === 'SIM' && toys.length > 1) continue;
             const targetToyId = tId === 'SIM' ? null : tId;
 
+            // Shotgun approach: Fire all possible motor types for complex toys like Osci 3
             commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration, directSocket));
-
-            if (name.includes('osci') || type.includes('osci')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'oscillate', strength, duration, directSocket));
-            }
-            if (name.includes('nora') || type.includes('nora')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration, directSocket));
-            }
-
-            if (name.includes('max') || type.includes('max')) {
-                commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration, directSocket));
-            }
+            commands.push(dispatchRaw(uid, targetToyId, 'oscillate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'rotate', strength, duration, directSocket));
+            commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration, directSocket));
         }
 
         await Promise.all(commands);
