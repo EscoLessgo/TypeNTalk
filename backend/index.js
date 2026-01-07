@@ -10,6 +10,13 @@ const path = require('path');
 
 const prisma = new PrismaClient();
 
+// Fallback Memory Store (if DB is down)
+const memoryStore = {
+    hosts: new Map(),
+    connections: new Map(),
+    responses: []
+};
+
 if (!process.env.DATABASE_URL) {
     console.warn('⚠️  DATABASE_URL is not set. The app requires a PostgreSQL database to function on Railway.');
     console.warn('👉 Go to Railway -> TypeNTalk Service -> Variables -> New Variable -> Reference -> Postgres -> DATABASE_URL');
@@ -61,7 +68,13 @@ app.get('/health', async (req, res) => {
         await prisma.$queryRaw`SELECT 1`;
         res.json({ status: 'ok', database: 'connected', timestamp: new Date() });
     } catch (err) {
-        res.status(503).json({ status: 'unhealthy', database: 'disconnected', error: err.message });
+        res.status(200).json({
+            status: 'warning',
+            database: 'disconnected',
+            mode: 'IN-MEMORY-FALLBACK',
+            error: err.message,
+            timestamp: new Date()
+        });
     }
 });
 
@@ -121,11 +134,16 @@ app.post('/api/lovense/callback', async (req, res) => {
 
     if (uid) {
         console.log(`[CALLBACK] Successful link for UID: ${uid}`);
-        await prisma.host.upsert({
-            where: { uid: uid },
-            update: { toys: JSON.stringify(toys), username: uid },
-            create: { uid: uid, username: uid, toys: JSON.stringify(toys) }
-        });
+        try {
+            await prisma.host.upsert({
+                where: { uid: uid },
+                update: { toys: JSON.stringify(toys), username: uid },
+                create: { uid: uid, username: uid, toys: JSON.stringify(toys) }
+            });
+        } catch (dbErr) {
+            console.warn('[DB] Fallback to memory for host upsert');
+            memoryStore.hosts.set(uid, { uid, toys: JSON.stringify(toys), username: uid, id: `mem-${uid}` });
+        }
 
         io.to(`host:${uid}`).emit('api-feedback', {
             success: true,
@@ -141,65 +159,86 @@ app.post('/api/lovense/callback', async (req, res) => {
 // Create Connection Link
 app.post('/api/connections/create', async (req, res) => {
     try {
-        const { uid } = req.body; // uid is the host's Lovense UID
+        const { uid } = req.body;
         if (!uid) return res.status(400).json({ error: 'Host UID required' });
 
-        // Ensure the host exists in our DB (especially important for 'Skip To Link' flow)
-        const host = await prisma.host.upsert({
-            where: { uid: uid },
-            update: { username: uid },
-            create: { uid: uid, username: uid }
-        });
+        let hostId;
+        let existingSlug;
 
-        // Check for an existing recent connection to prevent link-shuffling
-        const existing = await prisma.connection.findFirst({
-            where: { hostId: host.id },
-            orderBy: { createdAt: 'desc' }
-        });
+        try {
+            const host = await prisma.host.upsert({
+                where: { uid: uid },
+                update: { username: uid },
+                create: { uid: uid, username: uid }
+            });
+            hostId = host.id;
 
-        if (existing && !existing.approved) {
-            return res.json({ slug: existing.slug });
+            const existing = await prisma.connection.findFirst({
+                where: { hostId: hostId },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (existing && !existing.approved) {
+                existingSlug = existing.slug;
+            }
+        } catch (dbErr) {
+            console.warn('[DB] Fallback to memory for connection creation');
+            const memHost = memoryStore.hosts.get(uid) || { id: `mem-${uid}`, uid };
+            hostId = memHost.id;
+
+            // Check memory for existing
+            const memExisting = Array.from(memoryStore.connections.values())
+                .find(c => c.hostId === hostId && !c.approved);
+            if (memExisting) existingSlug = memExisting.slug;
         }
 
+        if (existingSlug) return res.json({ slug: existingSlug });
+
         const slug = uuidv4().substring(0, 8);
-        const connection = await prisma.connection.create({
-            data: {
-                slug,
-                hostId: host.id,
-                approved: false
-            }
-        });
+        try {
+            await prisma.connection.create({
+                data: { slug, hostId: hostId, approved: false }
+            });
+        } catch (dbErr) {
+            memoryStore.connections.set(slug, { slug, hostId: hostId, approved: false, createdAt: new Date() });
+        }
 
         res.json({ slug });
     } catch (err) {
         console.error('[API] Create connection error:', err);
-        res.status(500).json({ error: 'Database error', details: err.message });
+        res.status(500).json({ error: 'System Error', details: err.message });
     }
 });
 
 // Get Connection Status
 app.get('/api/connections/:slug', async (req, res) => {
     try {
-        const connection = await prisma.connection.findUnique({
-            where: { slug: req.params.slug },
-            include: { host: true }
-        });
+        let connection;
+        try {
+            connection = await prisma.connection.findUnique({
+                where: { slug: req.params.slug },
+                include: { host: true }
+            });
+        } catch (dbErr) {
+            console.warn('[DB] Fallback to memory for connection status');
+            connection = memoryStore.connections.get(req.params.slug);
+            if (connection) {
+                const uid = connection.hostId.startsWith('mem-') ? connection.hostId.replace('mem-', '') : 'host';
+                const memHost = memoryStore.hosts.get(uid) || { uid: uid, username: uid };
+                connection.host = memHost;
+            }
+        }
 
         if (!connection) return res.status(404).json({ error: 'Link invalid' });
 
         // Parse JSON fields
-        if (connection.host.toys) connection.host.toys = JSON.parse(connection.host.toys);
-        if (connection.history) {
-            connection.history = connection.history.map(h => ({
-                ...h,
-                pulses: h.pulses ? JSON.parse(h.pulses) : []
-            }));
+        if (connection.host?.toys && typeof connection.host.toys === 'string') {
+            connection.host.toys = JSON.parse(connection.host.toys);
         }
 
         res.json(connection);
     } catch (err) {
         console.error('[API] Get connection error:', err);
-        res.status(500).json({ error: 'Database error', details: err.message });
+        res.status(500).json({ error: 'System Error', details: err.message });
     }
 });
 
@@ -406,7 +445,13 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
     }
 
     try {
-        const host = await prisma.host.findUnique({ where: { uid } });
+        let host;
+        try {
+            host = await prisma.host.findUnique({ where: { uid } });
+        } catch (dbErr) {
+            host = memoryStore.hosts.get(uid);
+        }
+
         const floor = baseFloors.get(uid) || 0;
         const finalStrength = Math.max(strength, Math.floor(floor / 5)); // Strength is 0-20, floor is 0-100
 
