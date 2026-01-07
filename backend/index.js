@@ -264,9 +264,9 @@ io.on('connection', (socket) => {
         });
 
         if (conn && conn.approved) {
-            console.log(`[PULSE] Typing pulse from typist for slug ${slug} -> targeting host ${conn.host.uid}`);
-            sendCommand(conn.host.uid, 'vibrate', intensity || 3, 1);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 3 });
+            console.log(`[PULSE] Typing pulse for ${slug} -> targeting host ${conn.host.uid}`);
+            sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
+            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
             console.log(`[PULSE] Ignored typing pulse. Conn found: ${!!conn}, Approved: ${conn?.approved}`);
         }
@@ -295,8 +295,8 @@ io.on('connection', (socket) => {
         });
 
         if (conn && conn.approved) {
-            const surgeIntensity = 15;
-            const duration = Math.min(text.length * 0.1, 5); // 0.1s per char, max 5s
+            const surgeIntensity = 20; // 100% power
+            const duration = 3; // Fixed 3 seconds
 
             sendCommand(conn.host.uid, 'vibrate', surgeIntensity, duration);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });

@@ -106,7 +106,7 @@ export default function TypistView() {
         // Visual feedback and pulse
         const now = Date.now();
         if (now - lastPulseRef.current > 100) { // Throttling
-            socket.emit('typing-pulse', { slug, intensity: 3 });
+            socket.emit('typing-pulse', { slug, intensity: 9 });
             lastPulseRef.current = now;
         }
 
@@ -118,7 +118,7 @@ export default function TypistView() {
 
     const sendSurge = () => {
         if (!text.trim()) return;
-        const pulses = [{ time: 0, intensity: 15, duration: text.length * 0.1 }];
+        const pulses = [{ time: 0, intensity: 20, duration: 3 }];
         socket.emit('final-surge', { slug, text, pulses });
         setText('');
     };
@@ -127,7 +127,7 @@ export default function TypistView() {
         if (isReplaying) return;
         setIsReplaying(true);
         socket.emit('final-surge', { slug, text: fav.text });
-        setTimeout(() => setIsReplaying(false), 2000);
+        setTimeout(() => setIsReplaying(false), 3500);
     };
 
     const toggleMic = async () => {
