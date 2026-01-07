@@ -132,25 +132,22 @@ export default function HostView() {
     }, []);
 
     const restorationAttempted = useRef(false);
-    // Session Persistence: Auto-rejoin if UID in localStorage
     useEffect(() => {
+        if (!isSocketConnected) return;
+
         const savedUid = localStorage.getItem('lovense_uid');
-        if (savedUid && isSocketConnected && status === 'setup' && !restorationAttempted.current) {
+        if (savedUid && status === 'setup' && !restorationAttempted.current) {
             console.log('[SESSION] Restoring host session:', savedUid);
             restorationAttempted.current = true;
             setCustomName(savedUid);
             socket.emit('join-host', savedUid);
 
-            // Restore session silently
             const restore = async () => {
                 setIsLoading(true);
                 try {
                     await createLink(savedUid);
-                    if (slugRef.current) {
-                        setStatus('connected');
-                    }
                 } catch (err) {
-                    console.error('[RESTORE] Failed:', err);
+                    console.error('[RESTORE] Fatal error during sync:', err);
                 } finally {
                     setIsLoading(false);
                 }
@@ -158,6 +155,12 @@ export default function HostView() {
             restore();
         }
     }, [isSocketConnected, status]);
+
+    useEffect(() => {
+        if (slug && status === 'setup' && !isLoading) {
+            setStatus('connected');
+        }
+    }, [slug, status, isLoading]);
 
     const startSession = async () => {
         const baseId = customName.trim().toLowerCase();
@@ -241,13 +244,20 @@ export default function HostView() {
 
     const slugRef = useRef('');
     const createLink = async (uid) => {
+        if (!uid) return;
         try {
             const res = await axios.post(`${API_BASE}/api/connections/create`, { uid }, { timeout: 8000 });
-            setSlug(res.data.slug);
-            slugRef.current = res.data.slug;
+            if (res.data && res.data.slug) {
+                setSlug(res.data.slug);
+                slugRef.current = res.data.slug;
+                setError(null);
+            } else if (res.data && res.data.error) {
+                throw new Error(res.data.error);
+            }
         } catch (err) {
             console.error('[API] createLink error:', err);
-            setError(`Link Creation Failed: ${err.response?.data?.error || err.message}`);
+            const msg = err.response?.data?.error || err.message;
+            setError(`Link Creation Failed: ${msg}. Try force-resetting.`);
         }
     };
 
@@ -472,6 +482,15 @@ export default function HostView() {
                             <>START PAIRING <ArrowRight size={24} /></>
                         )}
                     </button>
+
+                    {isLoading && (
+                        <button
+                            onClick={resetSession}
+                            className="w-full py-2 text-[9px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 transition-colors"
+                        >
+                            Stuck? Cancel & Force Reset
+                        </button>
+                    )}
 
                     <button
                         onClick={() => setShowGuide(true)}
@@ -759,16 +778,18 @@ export default function HostView() {
                                 </div>
 
                                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {messages.map((msg) => (
+                                    {(messages || []).map((msg) => (
                                         <motion.div
-                                            key={msg.id}
+                                            key={msg?.id || Math.random()}
                                             initial={{ opacity: 0, x: -20 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all text-left"
                                         >
-                                            <p className="text-lg text-white font-medium leading-relaxed">{msg.text}</p>
+                                            <p className="text-lg text-white font-medium leading-relaxed">{msg?.text || ''}</p>
                                             <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">
-                                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {msg?.timestamp instanceof Date
+                                                    ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                    : 'just now'}
                                             </p>
                                         </motion.div>
                                     ))}
