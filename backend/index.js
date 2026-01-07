@@ -286,52 +286,60 @@ io.on('connection', (socket) => {
 });
 
 async function sendCommand(uid, command, strength, duration) {
+    if (!process.env.LOVENSE_DEVELOPER_TOKEN) {
+        console.error('[CRITICAL] LOVENSE_DEVELOPER_TOKEN is not set in environment variables!');
+        return;
+    }
+
     try {
         const host = await prisma.host.findUnique({ where: { uid } });
+
+        // If we don't have toy info, we try a broadcast command (no toyId)
         if (!host || !host.toys) {
-            // Fallback to generic vibrate if no toy info stored
+            console.log(`[LOVENSE] No toy metadata for ${uid}, sending broadcast command.`);
             return await dispatchRaw(uid, null, 'vibrate', strength, duration);
         }
 
         const toyList = JSON.parse(host.toys);
         const commands = [];
 
-        for (const [tId, toy] of Object.entries(toyList)) {
+        // Handle both Array and Object formats from Lovense
+        const toys = Array.isArray(toyList) ? toyList : Object.values(toyList);
+
+        for (const toy of toys) {
+            const tId = toy.id || toy.toyId;
             const name = (toy.name || '').toLowerCase();
             const type = (toy.type || '').toLowerCase();
 
-            // If it's a simulated/test toy, we still attempt a generic send
+            // Skip simulated toys if we have real ones
+            if (tId === 'SIM' && toys.length > 1) continue;
+
             const targetToyId = tId === 'SIM' ? null : tId;
 
-            // Default: Most toys support 'vibrate'
+            // Vibrate is universal
             commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration));
 
-            // Specialized Actions
-            if (name.includes('nora') || type === 'nora') {
+            // Osci / Nora / Max specific movement
+            if (name.includes('osci') || type.includes('osci') || name.includes('nora') || type.includes('nora')) {
                 commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
             }
-
-            if (name.includes('max') || type === 'max') {
+            if (name.includes('max') || type.includes('max')) {
                 commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration));
-            }
-
-            if (name.includes('edge') || type === 'edge') {
-                // Edge has dual motors, vibrate usually hits both.
-            }
-
-            if (name.includes('osci') || type.includes('osci')) {
-                // Osci has vibration and rotation
-                commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
             }
         }
 
         await Promise.all(commands);
     } catch (error) {
-        console.error('Error in intelligent command mapping:', error.message);
+        console.error('[LOVENSE] Error in command mapping:', error.message);
     }
 }
 
 async function dispatchRaw(uid, toyId, command, strength, duration) {
+    const apiUrls = [
+        'https://api.lovense.com/api/standard/v1/command',
+        'https://api.lovense-api.com/api/standard/v1/command'
+    ];
+
     const payload = {
         token: process.env.LOVENSE_DEVELOPER_TOKEN,
         uid: uid,
@@ -343,17 +351,24 @@ async function dispatchRaw(uid, toyId, command, strength, duration) {
 
     if (toyId) payload.toyId = toyId;
 
-    console.log(`[LOVENSE] Sending command: ${command} (${strength}) to ${uid}${toyId ? ` (Toy: ${toyId})` : ''}`);
+    // Try primary, then secondary if needed
+    for (const url of apiUrls) {
+        try {
+            console.log(`[LOVENSE] Dispatching ${command}:${strength} to ${uid} via ${url.split('/')[2]}`);
+            const response = await axios.post(url, payload, { timeout: 5000 });
 
-    return axios.post(LOVENSE_URL, payload)
-        .then(response => {
-            console.log(`[LOVENSE] Response for ${command}:`, response.data);
-            return response.data;
-        })
-        .catch(e => {
-            console.error(`[LOVENSE] Fetch failed for ${command}:`, e.message);
-            if (e.response) console.error(`[LOVENSE] Error data:`, e.response.data);
-        });
+            if (response.data && response.data.result) {
+                console.log(`[LOVENSE] Success:`, response.data.message || 'OK');
+                return response.data;
+            } else {
+                console.warn(`[LOVENSE] API Warning from ${url.split('/')[2]}:`, response.data);
+                // If it's a "token invalid" or similar, don't bother with second URL
+                if (response.data.code === 401) break;
+            }
+        } catch (e) {
+            console.error(`[LOVENSE] Network error for ${url.split('/')[2]}:`, e.message);
+        }
+    }
 }
 
 // Fallback for React routing - must be AFTER all other routes
