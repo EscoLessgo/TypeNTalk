@@ -9,6 +9,12 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
 const prisma = new PrismaClient();
+
+if (!process.env.DATABASE_URL) {
+    console.warn('⚠️  DATABASE_URL is not set. The app requires a PostgreSQL database to function on Railway.');
+    console.warn('👉 Go to Railway -> TypeNTalk Service -> Variables -> New Variable -> Reference -> Postgres -> DATABASE_URL');
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
