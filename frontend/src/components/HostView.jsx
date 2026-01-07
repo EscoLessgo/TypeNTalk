@@ -30,6 +30,7 @@ export default function HostView() {
     const [isLoading, setIsLoading] = useState(false);
     const [intensity, setIntensity] = useState(0); // 0-100 for visual meter
     const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
+    const [typingDraft, setTypingDraft] = useState('');
 
 
     const customNameRef = useRef(customName);
@@ -85,8 +86,13 @@ export default function HostView() {
             const { text } = data;
             if (!text) return;
             setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
+            setTypingDraft(''); // Clear draft when sent
             setIntensity(100);
             setTimeout(() => setIntensity(0), 1000);
+        });
+
+        socket.on('typing-draft', (data = {}) => {
+            setTypingDraft(data.text || '');
         });
 
         return () => {
@@ -383,6 +389,33 @@ export default function HostView() {
                         )}
                     </div>
 
+                    {/* Live Typist Feed */}
+                    <AnimatePresence>
+                        {typingDraft && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                                className="glass p-8 rounded-[2.5rem] border-purple-500/30 bg-purple-500/[0.03] space-y-4"
+                            >
+                                <div className="flex items-center justify-between border-b border-purple-500/10 pb-4">
+                                    <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Keyboard size={14} className="animate-pulse" /> Live Typist Feed
+                                    </h3>
+                                    <div className="flex gap-1">
+                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                        <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce" />
+                                    </div>
+                                </div>
+                                <p className="text-2xl font-medium text-white/90 leading-relaxed italic">
+                                    {typingDraft}
+                                    <span className="w-2 h-6 bg-purple-500 inline-block ml-1 animate-pulse" />
+                                </p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     {/* Live Message Stream */}
                     <AnimatePresence>
                         {messages.length > 0 && (
@@ -395,7 +428,7 @@ export default function HostView() {
                                     <h3 className="text-sm font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
                                         <Sparkles size={16} className="text-purple-500" /> Recent Whispers
                                     </h3>
-                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold">HISTORY</span>
                                 </div>
 
                                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -404,7 +437,7 @@ export default function HostView() {
                                             key={msg.id}
                                             initial={{ opacity: 0, x: -20 }}
                                             animate={{ opacity: 1, x: 0 }}
-                                            className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all"
+                                            className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all text-left"
                                         >
                                             <p className="text-lg text-white font-medium leading-relaxed">{msg.text}</p>
                                             <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">

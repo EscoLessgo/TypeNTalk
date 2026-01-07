@@ -304,7 +304,10 @@ export default function TypistView() {
                     className="w-full flex-grow bg-transparent text-2xl font-light placeholder:text-white/10 resize-none focus:outline-none leading-relaxed z-10"
                     placeholder="Whisper what you want..."
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={(e) => {
+                        setText(e.target.value);
+                        socket.emit('typing-update', { slug, text: e.target.value });
+                    }}
                     onKeyDown={handleKeyDown}
                 />
 

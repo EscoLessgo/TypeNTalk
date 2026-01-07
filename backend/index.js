@@ -212,6 +212,16 @@ io.on('connection', (socket) => {
         io.to(`typist:${slug}`).emit('approval-status', { approved });
     });
 
+    socket.on('typing-update', async ({ slug, text }) => {
+        const conn = await prisma.connection.findUnique({
+            where: { slug },
+            include: { host: true }
+        });
+        if (conn) {
+            io.to(`host:${conn.host.uid}`).emit('typing-draft', { text });
+        }
+    });
+
     // Real-time pulse from typing
     socket.on('typing-pulse', async ({ slug, intensity }) => {
         const conn = await prisma.connection.findUnique({
