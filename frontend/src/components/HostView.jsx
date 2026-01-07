@@ -31,6 +31,7 @@ export default function HostView() {
     const [intensity, setIntensity] = useState(0); // 0-100 for visual meter
     const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
     const [typingDraft, setTypingDraft] = useState('');
+    const [apiFeedback, setApiFeedback] = useState(null);
 
 
     const customNameRef = useRef(customName);
@@ -93,6 +94,12 @@ export default function HostView() {
 
         socket.on('typing-draft', (data = {}) => {
             setTypingDraft(data.text || '');
+        });
+
+        socket.on('api-feedback', (data = {}) => {
+            console.log('[SOCKET] API Feedback:', data);
+            setApiFeedback(data);
+            setTimeout(() => setApiFeedback(null), 5000);
         });
 
         return () => {
@@ -339,6 +346,16 @@ export default function HostView() {
                                 >
                                     Test Vibration
                                 </button>
+                                {apiFeedback && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        className={`mt-2 text-[8px] font-black uppercase tracking-widest ${apiFeedback.success ? 'text-green-500' : 'text-red-500'}`}
+                                    >
+                                        {apiFeedback.success ? '✓ TOY RESPONDED' : `✗ ERROR: ${apiFeedback.message}`}
+                                        {!apiFeedback.success && apiFeedback.code && <span className="ml-1 opacity-50">({apiFeedback.code})</span>}
+                                    </motion.div>
+                                )}
                             </div>
                         </div>
 

@@ -329,10 +329,16 @@ async function sendCommand(uid, command, strength, duration) {
             // Vibrate is universal
             commands.push(dispatchRaw(uid, targetToyId, 'vibrate', strength, duration));
 
-            // Osci / Nora / Max specific movement
-            if (name.includes('osci') || type.includes('osci') || name.includes('nora') || type.includes('nora')) {
+            // Osci specific: uses 'oscillate'
+            if (name.includes('osci') || type.includes('osci')) {
+                commands.push(dispatchRaw(uid, targetToyId, 'oscillate', Math.ceil(strength / 2), duration));
+            }
+
+            // Nora specific: uses 'rotate'
+            if (name.includes('nora') || type.includes('nora')) {
                 commands.push(dispatchRaw(uid, targetToyId, 'rotate', Math.ceil(strength / 2), duration));
             }
+
             if (name.includes('max') || type.includes('max')) {
                 commands.push(dispatchRaw(uid, targetToyId, 'pump', strength, duration));
             }
@@ -367,12 +373,19 @@ async function dispatchRaw(uid, toyId, command, strength, duration) {
             console.log(`[LOVENSE] Dispatching ${command}:${strength} to ${uid} via ${url.split('/')[2]}`);
             const response = await axios.post(url, payload, { timeout: 5000 });
 
+            // Send feedback to the frontend
+            io.to(`host:${uid}`).emit('api-feedback', {
+                success: response.data.result,
+                message: response.data.message || (response.data.result ? 'OK' : 'Error'),
+                code: response.data.code,
+                url: url.split('/')[2]
+            });
+
             if (response.data && response.data.result) {
                 console.log(`[LOVENSE] Success:`, response.data.message || 'OK');
                 return response.data;
             } else {
                 console.warn(`[LOVENSE] API Warning from ${url.split('/')[2]}:`, response.data);
-                // If it's a "token invalid" or similar, don't bother with second URL
                 if (response.data.code === 401) break;
             }
         } catch (e) {
