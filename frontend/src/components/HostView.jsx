@@ -252,9 +252,9 @@ export default function HostView() {
 
                         <button
                             onClick={resetSession}
-                            className="bg-white/5 hover:bg-white/10 text-white/20 text-[8px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-white/5 transition-all mt-4"
+                            className="bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest px-8 py-3 rounded-xl shadow-lg shadow-purple-600/20 active:scale-95 transition-all mt-6"
                         >
-                            Reset Session
+                            Reset Session & Start Fresh
                         </button>
                     </div>
 

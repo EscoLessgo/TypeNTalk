@@ -353,15 +353,22 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
 }
 
 async function dispatchRaw(uid, toyId, command, strength, duration, directSocket = null) {
-    // UPDATED ENDPOINTS: Lovense changed their API paths, which caused our 404 errors.
+    // Automatically trim whitespace from the token to prevent Railway paste errors
+    const rawToken = process.env.LOVENSE_DEVELOPER_TOKEN || '';
+    const token = rawToken.trim();
+
+    if (token) {
+        console.log(`[DEBUG] Token Loaded: ${token.substring(0, 4)}...${token.substring(token.length - 4)}`);
+    }
+
     const apiUrls = [
         'https://api.lovense-api.com/api/lan/v2/command',
         'https://api.lovense.com/api/lan/v2/command',
-        'https://api.lovense.com/api/lan/command'
+        'https://api.lovense.com/api/standard/v1/command'
     ];
 
     const payload = {
-        token: process.env.LOVENSE_DEVELOPER_TOKEN,
+        token: token,
         uid: uid,
         command: command,
         strength: Math.min(Math.max(strength, 0), 20),
