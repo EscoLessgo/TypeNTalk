@@ -96,7 +96,6 @@ export default function HostView() {
         socket.on('api-feedback', (data = {}) => {
             console.log('[SOCKET] API Feedback:', data);
             setApiFeedback(data);
-            setTimeout(() => setApiFeedback(null), 5000);
         });
 
         return () => {

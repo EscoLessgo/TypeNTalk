@@ -394,7 +394,12 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 if (response.data.code === 401) break;
             }
         } catch (e) {
+            const errMsg = `NETWORK ERROR: ${e.message} (Is Lovense API down?)`;
             console.error(`[LOVENSE] Network error for ${url.split('/')[2]}:`, e.message);
+
+            const feedback = { success: false, message: errMsg, url: url.split('/')[2] };
+            io.to(`host:${uid}`).emit('api-feedback', feedback);
+            if (directSocket) directSocket.emit('api-feedback', feedback);
         }
     }
 }
