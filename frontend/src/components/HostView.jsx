@@ -360,6 +360,12 @@ export default function HostView() {
                                 <Smartphone size={20} /> Open Lovense App
                             </a>
                             <button
+                                onClick={testVibration}
+                                className="w-full py-4 border-2 border-white/10 hover:border-white/30 text-white/60 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all"
+                            >
+                                Test Vibration (Check for 404 Fix)
+                            </button>
+                            <button
                                 onClick={bypassHandshake}
                                 className="text-[9px] font-black text-white/10 uppercase tracking-[0.3em] hover:text-white/30 pt-4"
                             >
