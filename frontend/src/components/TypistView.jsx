@@ -138,6 +138,8 @@ export default function TypistView() {
         }
     };
 
+    const isMicOnRef = useRef(false);
+
     const startMic = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -150,6 +152,7 @@ export default function TypistView() {
             source.connect(analyzer);
             analyzerRef.current = analyzer;
 
+            isMicOnRef.current = true;
             setIsMicOn(true);
             requestAnimationFrame(processAudio);
         } catch (err) {
@@ -165,12 +168,13 @@ export default function TypistView() {
         if (audioContextRef.current) {
             audioContextRef.current.close();
         }
+        isMicOnRef.current = false;
         setIsMicOn(false);
         setMicLevel(0);
     };
 
     const processAudio = () => {
-        if (!analyzerRef.current || !isMicOn) return;
+        if (!analyzerRef.current || !isMicOnRef.current) return;
 
         const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
         analyzerRef.current.getByteFrequencyData(dataArray);
@@ -184,21 +188,21 @@ export default function TypistView() {
         }
 
         const average = sum / binCount;
-        // Increase sensitivity: average/5 instead of /10
-        const normalized = Math.min(Math.floor(average / 5), 20);
+        // Sensitivity: /4 instead of /5 or /10
+        const normalized = Math.min(Math.floor(average / 4), 20);
 
         setMicLevel(normalized);
 
         // Send pulse if level is significant
-        if (normalized > 0) { // More sensitive threshold (was 3)
+        if (normalized > 0) {
             const now = Date.now();
-            if (now - lastPulseRef.current > 120) { // Slightly faster polling
+            if (now - lastPulseRef.current > 150) { // Slower throttle for voice to prevent jamming
                 socket.emit('voice-pulse', { slug, intensity: Math.max(normalized, 1) });
                 lastPulseRef.current = now;
             }
         }
 
-        if (isMicOn) requestAnimationFrame(processAudio);
+        if (isMicOnRef.current) requestAnimationFrame(processAudio);
     };
 
     if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest">Initializing Secure Link...</div>;
