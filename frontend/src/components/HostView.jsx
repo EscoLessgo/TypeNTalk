@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart } from 'lucide-react';
+import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -31,6 +31,7 @@ export default function HostView() {
     const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
     const [typingDraft, setTypingDraft] = useState('');
     const [apiFeedback, setApiFeedback] = useState(null);
+    const [showGuide, setShowGuide] = useState(false);
 
 
     const customNameRef = useRef(customName);
@@ -185,13 +186,118 @@ export default function HostView() {
     };
 
     return (
-        <div className="max-w-xl mx-auto space-y-8 pb-20">
+        <div className="max-w-xl mx-auto space-y-8 pb-20 relative">
+            <AnimatePresence>
+                {showGuide && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowGuide(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
+                        />
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed top-0 right-0 h-full w-full max-w-md bg-[#0d0d0f] border-l border-purple-500/20 shadow-2xl z-[101] overflow-y-auto custom-scrollbar p-8"
+                        >
+                            <div className="flex items-center justify-between mb-10">
+                                <h2 className="text-3xl font-black text-gradient italic uppercase tracking-tighter">Usage Guide</h2>
+                                <button
+                                    onClick={() => setShowGuide(false)}
+                                    className="p-2 hover:bg-white/5 rounded-full transition-colors text-white/40 hover:text-white"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-12">
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-black italic">01</div>
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-white/90">The Handshake</h3>
+                                    </div>
+                                    <p className="text-sm text-white/50 leading-relaxed uppercase tracking-tighter font-medium">
+                                        Enter your display name. This isn't just a label—it's the anchor for your tunnel. You'll then scan the QR code with your <span className="text-pink-500">Lovense Connect App</span>. This creates a secure bridge between your hardware and our synchronization engine.
+                                    </p>
+                                </section>
+
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400 font-black italic">02</div>
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-white/90">Relinquish Control</h3>
+                                    </div>
+                                    <p className="text-sm text-white/50 leading-relaxed uppercase tracking-tighter font-medium">
+                                        Once your toy is linked, a unique <span className="text-purple-400">Secret Controller Link</span> will be generated. Copy this link and send it to your partner. They will become your Typist, gaining the power to influence your hardware with every keystroke and whisper.
+                                    </p>
+                                </section>
+
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-black italic">03</div>
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-white/90">Pure Synchronization</h3>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                                        <div className="flex items-center gap-2 text-xs font-black text-purple-400 uppercase tracking-widest">
+                                            <Zap size={14} /> Keystore Pulse
+                                        </div>
+                                        <p className="text-[11px] text-white/40 uppercase leading-relaxed">Every character they type sends a surge of vibration. The faster they type, the more intense the sensation.</p>
+
+                                        <div className="flex items-center gap-2 text-xs font-black text-pink-400 uppercase tracking-widest pt-2">
+                                            <Heart size={14} /> Voice Reactive
+                                        </div>
+                                        <p className="text-[11px] text-white/40 uppercase leading-relaxed">Their whispers and moans translate directly into liquid vibrations, reacting to the frequency of their voice in real-time.</p>
+                                    </div>
+                                </section>
+
+                                <section className="space-y-4 border-t border-white/5 pt-8">
+                                    <div className="flex items-center gap-3">
+                                        <Shield className="text-green-500" size={20} />
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-green-500">Safety & Solitude</h3>
+                                    </div>
+                                    <ul className="space-y-3">
+                                        <li className="flex gap-3 text-[10px] text-white/40 uppercase font-black tracking-widest leading-relaxed italic">
+                                            <Lock size={12} className="shrink-0 text-white/20" /> No logs. No recordings. Pure ephemeral sync.
+                                        </li>
+                                        <li className="flex gap-3 text-[10px] text-white/40 uppercase font-black tracking-widest leading-relaxed italic">
+                                            <Eye size={12} className="shrink-0 text-white/20" /> Only you can see your live feedback and chat stream.
+                                        </li>
+                                        <li className="flex gap-3 text-[10px] text-white/40 uppercase font-black tracking-widest leading-relaxed italic">
+                                            <X size={12} className="shrink-0 text-white/20" /> Destroying the session wipes all temporary trace data.
+                                        </li>
+                                    </ul>
+                                </section>
+
+                                <button
+                                    onClick={() => setShowGuide(false)}
+                                    className="w-full button-premium py-6 rounded-2xl text-lg font-black"
+                                >
+                                    UNDERSTOOD
+                                </button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* Status Indicator */}
-            <div className="absolute top-8 right-8 flex items-center gap-2 px-3 py-1.5 glass rounded-full">
-                <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
-                    {isSocketConnected ? 'SERVER LIVE' : 'OFFLINE'}
-                </span>
+            <div className="absolute top-8 right-8 flex items-center gap-4">
+                <button
+                    onClick={() => setShowGuide(true)}
+                    className="p-1.5 glass rounded-full text-white/40 hover:text-purple-400 transition-colors"
+                    title="Quick Start Guide"
+                >
+                    <HelpCircle size={20} />
+                </button>
+                <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-full">
+                    <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
+                        {isSocketConnected ? 'SERVER LIVE' : 'OFFLINE'}
+                    </span>
+                </div>
             </div>
 
             <header className="text-center space-y-4 pt-10">
@@ -268,6 +374,13 @@ export default function HostView() {
                         ) : (
                             <>START PAIRING <ArrowRight size={24} /></>
                         )}
+                    </button>
+
+                    <button
+                        onClick={() => setShowGuide(true)}
+                        className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <HelpCircle size={12} /> View Detailed Usage Instructions
                     </button>
                 </div>
             )}

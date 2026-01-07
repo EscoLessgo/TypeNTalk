@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
 import { useParams } from 'react-router-dom';
-import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check } from 'lucide-react';
+import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check, HelpCircle, X, Lock, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -27,6 +27,7 @@ export default function TypistView() {
     const [ripples, setRipples] = useState([]); // Array of {id, x, y}
     const [error, setError] = useState(null);
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
+    const [showGuide, setShowGuide] = useState(false);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -231,9 +232,105 @@ export default function TypistView() {
     );
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6 pb-20">
+        <div className="max-w-2xl mx-auto space-y-6 pb-20 relative">
+            <AnimatePresence>
+                {showGuide && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowGuide(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
+                        />
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed top-0 right-0 h-full w-full max-w-md bg-[#0d0d0f] border-l border-pink-500/20 shadow-2xl z-[101] overflow-y-auto custom-scrollbar p-8"
+                        >
+                            <div className="flex items-center justify-between mb-10">
+                                <h2 className="text-3xl font-black text-gradient italic uppercase tracking-tighter">Controller Guide</h2>
+                                <button
+                                    onClick={() => setShowGuide(false)}
+                                    className="p-2 hover:bg-white/5 rounded-full transition-colors text-white/40 hover:text-white"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-12 text-left">
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400 font-black italic">01</div>
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-white/90">The Connection</h3>
+                                    </div>
+                                    <p className="text-sm text-white/50 leading-relaxed uppercase tracking-tighter font-medium">
+                                        You have been granted access to <span className="text-pink-500">{hostName}'s</span> hardware. Every action you take here translates directly into physical sensation on their end.
+                                    </p>
+                                </section>
+
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-black italic">02</div>
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-white/90">Ways to Play</h3>
+                                    </div>
+                                    <div className="space-y-6">
+                                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                                            <div className="flex items-center gap-2 text-xs font-black text-purple-400 uppercase tracking-widest">
+                                                <Keyboard size={14} /> Keystore Pulse
+                                            </div>
+                                            <p className="text-[11px] text-white/40 uppercase leading-relaxed font-medium">Every letter you type sends a sharp pulse. A quick flurry of text creates intense, rhythmic sensations.</p>
+                                        </div>
+
+                                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                                            <div className="flex items-center gap-2 text-xs font-black text-pink-400 uppercase tracking-widest">
+                                                <Mic size={14} /> Voice Reactive
+                                            </div>
+                                            <p className="text-[11px] text-white/40 uppercase leading-relaxed font-medium">Toggle the mic to stream your voice. The vibrations will flow with your pitch and volume—perfect for whispers, breath work, or commands.</p>
+                                        </div>
+
+                                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                                            <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest">
+                                                <Zap size={14} /> Final Surge
+                                            </div>
+                                            <p className="text-[11px] text-white/40 uppercase leading-relaxed font-medium">Submitting your text or replaying a favorite triggers a sustained, powerful 3-second vibration at maximum intensity.</p>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="space-y-4 border-t border-white/5 pt-8">
+                                    <div className="flex items-center gap-3">
+                                        <Lock className="text-green-500" size={20} />
+                                        <h3 className="text-lg font-black uppercase italic tracking-widest text-green-500">Secure Protocol</h3>
+                                    </div>
+                                    <p className="text-sm text-white/40 uppercase tracking-tighter font-black leading-relaxed italic">
+                                        Your input is processed in real-time and never archived. We act as a stateless bridge between your control and their Hardware. Pure intimacy, zero footprints.
+                                    </p>
+                                </section>
+
+                                <button
+                                    onClick={() => setShowGuide(false)}
+                                    className="w-full button-premium py-6 rounded-2xl text-lg font-black"
+                                >
+                                    GET STARTED
+                                </button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* Header / Brand */}
-            <div className="text-center pt-8 pb-4">
+            <div className="text-center pt-8 pb-4 relative">
+                <button
+                    onClick={() => setShowGuide(true)}
+                    className="absolute top-8 right-0 p-1.5 glass rounded-full text-white/40 hover:text-pink-500 transition-colors"
+                >
+                    <HelpCircle size={20} />
+                </button>
+
                 <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-purple-500/20 mb-4">
                     <Zap className="text-purple-400" size={12} />
                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Synchronized Session</span>
@@ -323,12 +420,20 @@ export default function TypistView() {
                             <span className="flex items-center gap-2"><Mic size={12} className="text-pink-400" /> VOICE REACTIVE</span>
                         </div>
                     </div>
-                    <button
-                        className="button-premium flex items-center gap-3 group px-12"
-                        onClick={sendSurge}
-                    >
-                        FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowGuide(true)}
+                            className="p-3 text-white/20 hover:text-white transition-colors"
+                        >
+                            <HelpCircle size={18} />
+                        </button>
+                        <button
+                            className="button-premium flex items-center gap-3 group px-12"
+                            onClick={sendSurge}
+                        >
+                            FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
