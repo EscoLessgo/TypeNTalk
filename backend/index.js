@@ -341,17 +341,11 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
 
         for (const toy of toys) {
             const tId = toy.id || toy.toyId;
-            const name = (toy.name || '').toLowerCase();
-            const type = (toy.type || '').toLowerCase();
-
             if (tId === 'SIM' && toys.length > 1) continue;
             const targetToyId = tId === 'SIM' ? null : tId;
 
-            // Shotgun approach: Fire all possible motor types with Capitalized commands
+            // Simplified: Only send Vibrate. Shotgunning 4 commands per keypress causes instant rate-limiting.
             commands.push(dispatchRaw(uid, targetToyId, 'Vibrate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'Oscillate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'Rotate', strength, duration, directSocket));
-            commands.push(dispatchRaw(uid, targetToyId, 'Pump', strength, duration, directSocket));
         }
 
         await Promise.all(commands);
