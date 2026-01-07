@@ -13,7 +13,8 @@ const SessionHeatmap = ({ events, startTime }) => {
 
     const bins = useMemo(() => {
         const numBins = 60; // 60 bins for 1 minute or proportional
-        const binSize = duration / numBins;
+        const safeDuration = duration > 0 ? duration : 60000;
+        const binSize = safeDuration / numBins;
         const result = Array(numBins).fill(0);
 
         events.forEach(event => {
@@ -40,8 +41,8 @@ const SessionHeatmap = ({ events, startTime }) => {
                         initial={{ height: 0 }}
                         animate={{ height: `${Math.max(10, val * 4)}%` }}
                         className={`flex-1 rounded-t-sm transition-colors duration-500 ${val > 15 ? 'bg-pink-500' :
-                                val > 10 ? 'bg-purple-500' :
-                                    val > 5 ? 'bg-purple-900/50' : 'bg-white/5'
+                            val > 10 ? 'bg-purple-500' :
+                                val > 5 ? 'bg-purple-900/50' : 'bg-white/5'
                             }`}
                         style={{
                             opacity: val > 0 ? 0.8 : 0.3

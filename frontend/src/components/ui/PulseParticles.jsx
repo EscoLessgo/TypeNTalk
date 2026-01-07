@@ -11,6 +11,7 @@ const PulseParticles = ({ intensity }) => {
         const ctx = canvas.getContext('2d');
 
         const resize = () => {
+            if (!canvas || !canvas.parentElement) return;
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
         };

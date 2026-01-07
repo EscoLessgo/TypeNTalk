@@ -131,22 +131,29 @@ export default function HostView() {
         };
     }, []);
 
+    const restorationAttempted = useRef(false);
     // Session Persistence: Auto-rejoin if UID in localStorage
     useEffect(() => {
         const savedUid = localStorage.getItem('lovense_uid');
-        if (savedUid && isSocketConnected && status === 'setup') {
+        if (savedUid && isSocketConnected && status === 'setup' && !restorationAttempted.current) {
             console.log('[SESSION] Restoring host session:', savedUid);
+            restorationAttempted.current = true;
             setCustomName(savedUid);
             socket.emit('join-host', savedUid);
 
             // Restore session silently
             const restore = async () => {
                 setIsLoading(true);
-                await createLink(savedUid);
-                if (slugRef.current) {
-                    setStatus('connected');
+                try {
+                    await createLink(savedUid);
+                    if (slugRef.current) {
+                        setStatus('connected');
+                    }
+                } catch (err) {
+                    console.error('[RESTORE] Failed:', err);
+                } finally {
+                    setIsLoading(false);
                 }
-                setIsLoading(false);
             };
             restore();
         }
@@ -181,6 +188,7 @@ export default function HostView() {
                 localStorage.setItem('lovense_uid', uniqueId);
             } else {
                 setError('Unexpected response from server');
+                // Ensure we reset loading state so user can try again
             }
         } catch (err) {
             console.error('Start session error:', err);
