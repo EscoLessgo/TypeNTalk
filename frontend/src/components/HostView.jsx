@@ -367,9 +367,9 @@ export default function HostView() {
                             </button>
                             <button
                                 onClick={bypassHandshake}
-                                className="text-[9px] font-black text-white/10 uppercase tracking-[0.3em] hover:text-white/30 pt-4"
+                                className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30"
                             >
-                                Skip To Link (Manual/Test Only)
+                                ⚠️ FORCE SKIP TO LINK (IF APP HANGS)
                             </button>
                         </div>
                     </div>

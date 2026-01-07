@@ -190,6 +190,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     socket.on('join-host', (uid) => {
+        socket.uid = uid;
         socket.join(`host:${uid}`);
         console.log(`[SOCKET] Host ${uid} joined room host:${uid}`);
         socket.emit('host:ready', { uid });
