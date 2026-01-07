@@ -74,7 +74,9 @@ app.get('/api/lovense/qr', async (req, res) => {
             token: token,
             uid: username,
             uname: username,
-            v: 2
+            v: 2,
+            apiVer: 1,
+            type: 'standard'
         });
 
         if (response.data && response.data.result) {
@@ -100,12 +102,18 @@ app.post('/api/lovense/callback', async (req, res) => {
     const { uid, toys } = req.body;
 
     if (uid) {
+        console.log(`[CALLBACK] Successful link for UID: ${uid}`);
         await prisma.host.upsert({
             where: { uid: uid },
             update: { toys: JSON.stringify(toys), username: uid },
             create: { uid: uid, username: uid, toys: JSON.stringify(toys) }
         });
 
+        io.to(`host:${uid}`).emit('api-feedback', {
+            success: true,
+            message: '✓ LINK SUCCESSFUL! APP CONNECTED TO SERVER.',
+            url: 'callback'
+        });
         io.to(`host:${uid}`).emit('lovense:linked', { toys });
     }
 
