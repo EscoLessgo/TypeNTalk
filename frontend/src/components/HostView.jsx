@@ -40,18 +40,15 @@ export default function HostView() {
     }, [customName]);
 
     useEffect(() => {
-        const onConnect = () => {
+        socket.on('connect', () => {
             console.log('[SOCKET] Connected');
             setIsSocketConnected(true);
-        };
-        const onDisconnect = () => {
+        });
+        socket.on('disconnect', () => {
             console.log('[SOCKET] Disconnected');
             setIsSocketConnected(false);
-        };
-
-        socket.on('connect', onConnect);
-        socket.on('disconnect', onDisconnect);
-        if (socket.connected) onConnect();
+        });
+        if (socket.connected) setIsSocketConnected(true);
 
         socket.on('lovense:linked', (data = {}) => {
             console.log('[SOCKET] Lovense linked received:', data);
@@ -109,6 +106,8 @@ export default function HostView() {
             socket.off('approval-request');
             socket.off('incoming-pulse');
             socket.off('new-message');
+            socket.off('typing-draft');
+            socket.off('api-feedback');
         };
     }, []); // Empty dependency array to prevent effect re-runs on name change
 
@@ -153,12 +152,14 @@ export default function HostView() {
     };
 
     const testVibration = () => {
-        if (status !== 'connected') return;
-        setApiFeedback({ success: true, message: 'SENDING...', url: 'local' });
+        setApiFeedback({ success: true, message: 'LOCATING TOY...' });
+        console.log('[DEBUG] testVibration clicked with customName:', customName);
         socket.emit('test-toy', { uid: customName });
     };
 
     const pingServer = () => {
+        console.log('[DEBUG] pingServer clicked');
+        setApiFeedback({ success: true, message: 'WAITING FOR SERVER RESPONSE...' });
         socket.emit('ping-server');
     };
 
@@ -209,28 +210,37 @@ export default function HostView() {
                 </span>
             </div>
 
-            <header className="text-center space-y-2 pt-10">
-                <div className="bg-red-600 text-white text-[8px] font-black py-1 px-4 rounded-full inline-block mb-4 animate-pulse uppercase tracking-[0.2em]">DEBUG MODE: V2 LIVE</div>
+            <header className="text-center space-y-4 pt-10">
+                <div className="bg-red-600 text-white text-[10px] font-black py-2 px-6 rounded-full inline-block mb-4 animate-bounce uppercase tracking-[0.2em]">DEBUG V2 ACTIVATED</div>
                 <h1 className="text-6xl font-black tracking-tight text-white uppercase italic leading-none">
-                    Veroe <span className="text-purple-500">Sync V2</span>
+                    Veroe <span className="text-purple-500 font-black">Sync V2</span>
                 </h1>
-                <p className="text-white/30 font-bold uppercase tracking-[0.4em] text-[10px] mb-6">Cloud Toy Control Engine</p>
 
-                <div className="flex flex-col items-center gap-4 py-4">
-                    <button
-                        onClick={pingServer}
-                        className="bg-white/10 hover:bg-white/20 text-white/40 text-[9px] font-black uppercase tracking-[0.3em] px-6 py-2 rounded-full border border-white/5 transition-all"
-                    >
-                        Test Server Connection (Ping)
-                    </button>
+                <div className="flex flex-col items-center gap-6 py-8 glass border-red-500/50 bg-red-500/10 rounded-[3rem]">
+                    <h2 className="text-white font-black text-xs uppercase tracking-widest">Connection Debug Tools</h2>
+                    <div className="flex flex-wrap justify-center gap-4 px-6">
+                        <button
+                            onClick={pingServer}
+                            className="bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl shadow-red-600/20 active:scale-95 transition-all"
+                        >
+                            1. CLICK TO PING SERVER
+                        </button>
+
+                        <button
+                            onClick={testVibration}
+                            className="bg-white hover:bg-white/90 text-black text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl active:scale-95 transition-all"
+                        >
+                            2. CLICK TO SHOTGUN VIBRATE
+                        </button>
+                    </div>
 
                     {apiFeedback && (
                         <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl glass ${apiFeedback.success ? 'text-green-500' : 'text-red-500'}`}
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className={`text-sm font-black uppercase tracking-[0.2em] px-8 py-6 rounded-3xl shadow-2xl border-2 ${apiFeedback.success ? 'bg-green-600 text-white border-green-400' : 'bg-red-600 text-white border-red-400'}`}
                         >
-                            {apiFeedback.success ? `✓ ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
+                            {apiFeedback.success ? `✓ SUCCESS: ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
                         </motion.div>
                     )}
                 </div>

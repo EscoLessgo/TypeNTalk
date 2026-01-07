@@ -230,14 +230,15 @@ io.on('connection', (socket) => {
         console.log(`[TEST-TOY] Direct test requested for UID: ${uid}`);
         socket.emit('api-feedback', {
             success: true,
-            message: 'Server received click. Dispatching to Lovense Cloud...',
+            message: `SERVER RECEIVED CLICK FOR ${uid}. CONNECTING TO LOVENSE...`,
             url: 'local'
         });
-        sendCommand(uid, 'vibrate', 20, 4, socket); // Pass socket for direct feedback
+        sendCommand(uid, 'vibrate', 20, 6, socket);
     });
 
     socket.on('ping-server', () => {
-        socket.emit('api-feedback', { success: true, message: 'PONG! Socket connection is healthy.', url: 'server' });
+        console.log('[PING] Received ping request');
+        socket.emit('api-feedback', { success: true, message: 'PONG! YOU ARE CONNECTED TO VEROE SERVER.', url: 'server' });
     });
 
     // Real-time pulse from typing
