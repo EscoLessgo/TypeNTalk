@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight, Sparkles, Keyboard } from 'lucide-react';
+import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -21,7 +21,6 @@ export default function HostView() {
     const [customName, setCustomName] = useState('');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
-    const [incomingPulses, setIncomingPulses] = useState([]);
     const [slug, setSlug] = useState('');
     const [error, setError] = useState(null);
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
@@ -71,13 +70,10 @@ export default function HostView() {
 
         socket.on('incoming-pulse', (data = {}) => {
             const { source, level } = data;
-            const id = Date.now();
-            setIncomingPulses(prev => [...prev.slice(-5), { id, level: level || 5 }]);
             setIntensity(Math.min((level || 5) * 5, 100));
             setLastAction(source || 'active');
 
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
-            setTimeout(() => setIncomingPulses(prev => prev.filter(p => p.id !== id)), 1000);
         });
 
         socket.on('new-message', (data = {}) => {
@@ -151,23 +147,6 @@ export default function HostView() {
         }
     };
 
-    const testVibration = () => {
-        const uid = localStorage.getItem('lovense_uid') || customName;
-        setApiFeedback({ success: true, message: `LOCATING TOY FOR ${uid}...` });
-        socket.emit('test-toy', { uid: uid });
-    };
-
-    const pingServer = () => {
-        setApiFeedback({ success: true, message: 'WAITING FOR SERVER RESPONSE...' });
-        socket.emit('ping-server');
-    };
-
-    const runDiagnostics = () => {
-        const uid = localStorage.getItem('lovense_uid') || customName;
-        setApiFeedback({ success: true, message: 'RUNNING DIAGNOSTICS...' });
-        socket.emit('run-diagnostics', { uid: uid });
-    };
-
     const resetSession = () => {
         localStorage.removeItem('lovense_uid');
         window.location.reload();
@@ -205,11 +184,6 @@ export default function HostView() {
         }
     };
 
-    const approveTypist = (id, approved) => {
-        socket.emit('approve-typist', { slug: id, approved });
-        setTypists(prev => prev.filter(t => t.slug !== id));
-    };
-
     return (
         <div className="max-w-xl mx-auto space-y-8 pb-20">
             {/* Status Indicator */}
@@ -221,53 +195,29 @@ export default function HostView() {
             </div>
 
             <header className="text-center space-y-4 pt-10">
-                <div className="bg-red-600 text-white text-[10px] font-black py-2 px-6 rounded-full inline-block mb-4 animate-bounce uppercase tracking-[0.2em]">DEBUG V2 ACTIVATED</div>
-                <h1 className="text-6xl font-black tracking-tight text-white uppercase italic leading-none">
-                    Veroe <span className="text-purple-500 font-black">Sync V2</span>
+                <div className="flex items-center justify-center gap-3 glass-pill px-6 py-2 w-max mx-auto border-pink-500/20 kinky-glow">
+                    <Heart className="text-pink-500 animate-pulse" size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-pink-400">Secure LDR Connection</span>
+                </div>
+
+                <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase italic leading-none group">
+                    <span className="text-gradient">TNT</span> <span className="text-white hover:text-pink-500 transition-colors duration-500">SYNC</span>
                 </h1>
 
-                <div className="flex flex-col items-center gap-6 py-8 glass border-red-500/50 bg-red-500/10 rounded-[3rem]">
-                    <h2 className="text-white font-black text-xs uppercase tracking-widest">Connection Debug Tools</h2>
-                    <div className="flex flex-wrap justify-center gap-4 px-6">
-                        <button
-                            onClick={pingServer}
-                            className="bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl shadow-red-600/20 active:scale-95 transition-all"
-                        >
-                            1. CLICK TO PING SERVER
-                        </button>
+                <p className="text-sm text-balance text-white/40 font-medium tracking-wide max-w-sm mx-auto uppercase py-2">
+                    Premium Real-Time Toy Control for Intimacy without Boundaries.
+                </p>
 
-                        <button
-                            onClick={testVibration}
-                            className="bg-white hover:bg-white/90 text-black text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl active:scale-95 transition-all"
-                        >
-                            2. CLICK TO SHOTGUN VIBRATE
-                        </button>
-
-                        <button
-                            onClick={runDiagnostics}
-                            className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-2xl active:scale-95 transition-all"
-                        >
-                            3. RUN TOY DIAGNOSTICS
-                        </button>
-
-                        <button
-                            onClick={resetSession}
-                            className="bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest px-8 py-3 rounded-xl shadow-lg shadow-purple-600/20 active:scale-95 transition-all mt-6"
-                        >
-                            Reset Session & Start Fresh
-                        </button>
-                    </div>
-
-                    {apiFeedback && (
-                        <motion.div
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className={`text-sm font-black uppercase tracking-[0.2em] px-8 py-6 rounded-3xl shadow-2xl border-2 ${apiFeedback.success ? 'bg-green-600 text-white border-green-400' : 'bg-red-600 text-white border-red-400'}`}
-                        >
-                            {apiFeedback.success ? `✓ SUCCESS: ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
-                        </motion.div>
-                    )}
-                </div>
+                {apiFeedback && (
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        className={`text-[10px] font-black uppercase tracking-[0.2em] px-6 py-3 rounded-full mx-auto w-max border-2 ${apiFeedback.success ? 'bg-green-600/20 text-green-400 border-green-500/20' : 'bg-red-600/20 text-red-400 border-red-500/20'}`}
+                    >
+                        {apiFeedback.success ? `✓ ${apiFeedback.message}` : `✗ ERROR: ${apiFeedback.message}`}
+                    </motion.div>
+                )}
             </header>
 
             {status === 'setup' && (
@@ -360,12 +310,6 @@ export default function HostView() {
                                 <Smartphone size={20} /> Open Lovense App
                             </a>
                             <button
-                                onClick={testVibration}
-                                className="w-full py-4 border-2 border-white/10 hover:border-white/30 text-white/60 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all"
-                            >
-                                Test Vibration (Check for 404 Fix)
-                            </button>
-                            <button
                                 onClick={bypassHandshake}
                                 className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30"
                             >
@@ -393,7 +337,6 @@ export default function HostView() {
                         </div>
 
                         <div className="flex items-center gap-5 mb-10 p-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
-                            {/* Animated background energy for the status card */}
                             <motion.div
                                 className="absolute inset-0 bg-green-500/5"
                                 animate={{
@@ -407,27 +350,19 @@ export default function HostView() {
                                 <Shield className="text-green-500" size={32} />
                             </div>
                             <div className="z-10 text-left">
-                                <h3 className="font-black text-2xl text-white tracking-tight">LINK SECURED</h3>
+                                <h3 className="font-black text-2xl text-white tracking-tight text-gradient">SESSION ACTIVE</h3>
                                 <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase">
-                                    {Object.keys(toys).length} Device(s) listening
+                                    {Object.keys(toys).length} Device(s) Linked
                                 </p>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={testVibration}
-                                        className="mt-2 text-[9px] bg-white/10 hover:bg-white/20 text-white/60 px-2 py-1 rounded-md transition-all uppercase font-bold tracking-tighter"
-                                    >
-                                        Test Vibration (Max)
-                                    </button>
-                                </div>
                             </div>
                         </div>
 
                         {/* Energy Meter */}
                         <div className="mb-10 space-y-3">
                             <div className="flex justify-between items-center px-1">
-                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Live Pulse Intensity</span>
-                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${intensity > 0 ? 'text-purple-400' : 'text-white/10'}`}>
-                                    {intensity > 0 ? (lastAction === 'voice' ? 'Whisper Syncing' : 'Typing Syncing') : 'Idle'}
+                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Pulse Intensity</span>
+                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
+                                    {intensity > 0 ? (lastAction === 'voice' ? 'Voice Reactive' : 'Keystore Pulse') : 'Listening...'}
                                 </span>
                             </div>
                             <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
@@ -450,13 +385,14 @@ export default function HostView() {
                                             {window.location.host}/t/{slug}
                                         </code>
                                         <button
-                                            className="w-full py-5 bg-purple-500 text-white rounded-2xl font-black text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-purple-500/20"
+                                            className="w-full button-premium"
                                             onClick={() => {
                                                 navigator.clipboard.writeText(`${window.location.origin}/t/${slug}`);
-                                                alert('Secret Controller Link Copied!');
+                                                setCopied(true);
+                                                setTimeout(() => setCopied(false), 2000);
                                             }}
                                         >
-                                            COPY SECRET LINK
+                                            {copied ? 'COPIED!' : 'COPY SECRET LINK'}
                                         </button>
                                     </div>
                                 </div>
@@ -529,33 +465,59 @@ export default function HostView() {
                             </motion.div>
                         )}
                     </AnimatePresence>
-
-                    {/* Visual Pulse Overlays */}
-                    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-                        <AnimatePresence>
-                            {incomingPulses.map(pulse => (
-                                <motion.div
-                                    key={pulse.id}
-                                    initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
-                                    animate={{
-                                        opacity: [0, 0.4, 0],
-                                        scale: [0.5, 1.5],
-                                        rotate: [0, 10]
-                                    }}
-                                    exit={{ opacity: 0 }}
-                                    className="absolute inset-0 border-[40px] border-purple-500/20 rounded-[4rem]"
-                                />
-                            ))}
-                        </AnimatePresence>
-
-                        {/* Global Flash */}
-                        <motion.div
-                            className="absolute inset-0 bg-purple-500/10"
-                            animate={{ opacity: intensity > 20 ? 0.2 : 0 }}
-                        />
-                    </div>
                 </div>
             )}
+
+            {/* Privacy & Reassurance Section */}
+            <section className="glass p-10 rounded-[2.5rem] border-purple-500/10 space-y-6">
+                <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+                    <div className="p-3 bg-purple-500/10 rounded-2xl">
+                        <Shield className="text-purple-400" size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black uppercase italic tracking-wider">Privacy First Protocol</h3>
+                        <p className="text-[10px] text-white/40 uppercase tracking-[0.2em]">Your Safety is Non-Negotiable</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                        <div className="flex items-center gap-2 text-pink-400">
+                            <Check size={14} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">End-to-End Encryption</span>
+                        </div>
+                        <p className="text-[11px] text-white/60 leading-relaxed">
+                            Each connection is strictly secured via TLS/SSL. Handshake codes are unique per session and destroyed upon disconnect.
+                        </p>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                        <div className="flex items-center gap-2 text-pink-400">
+                            <Check size={14} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">TOS Compliance</span>
+                        </div>
+                        <p className="text-[11px] text-white/60 leading-relaxed">
+                            TNT Sync operates in full compliance with Lovense Developer Terms. We never store personal biometric data or voice recordings.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-3xl bg-purple-500/5 border border-purple-500/10 flex items-start gap-4">
+                    <Info className="text-purple-400 shrink-0" size={18} />
+                    <p className="text-[11px] text-white/50 leading-relaxed uppercase tracking-tight">
+                        Our servers act as a stateless bridge. History is stored locally on your device or safely in a temporary session database to ensure you remain in control of your data at all times.
+                    </p>
+                </div>
+
+                {status !== 'setup' && (
+                    <button
+                        onClick={resetSession}
+                        className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-red-400 transition-colors"
+                    >
+                        Destroy Session & Start Fresh
+                    </button>
+                )}
+            </section>
         </div>
     );
 }

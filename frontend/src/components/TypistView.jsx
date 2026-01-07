@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
 import { useParams } from 'react-router-dom';
-import { Send, Mic, MicOff, Keyboard, Zap, Heart, History, Play, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -209,59 +209,64 @@ export default function TypistView() {
         if (isMicOnRef.current) requestAnimationFrame(processAudio);
     };
 
-    if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest">Initializing Secure Link...</div>;
+    if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest italic">Establishing Secure LDR Tunnel...</div>;
     if (status === 'invalid') return (
         <div className="max-w-md mx-auto glass p-10 rounded-3xl text-center space-y-6">
             <div className="mx-auto w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center">
                 <Shield className="text-red-400" size={40} />
             </div>
-            <h2 className="text-2xl font-bold italic text-red-400 uppercase">Link Invalid</h2>
-            <p className="text-white/60">{error || 'This link has expired or never existed.'}</p>
-            <button
-                onClick={() => window.location.href = '/'}
-                className="button-premium w-full"
-            >
-                Return to Home
-            </button>
+            <h2 className="text-2xl font-bold italic text-red-400 uppercase">Tunnel Expired</h2>
+            <p className="text-white/60">{error || 'This pairing link is no longer valid.'}</p>
         </div>
     );
-    if (status === 'denied') return <div className="text-center p-20 text-red-500">Access Denied</div>;
+    if (status === 'denied') return <div className="text-center p-20 text-red-500 font-black italic uppercase">Access Explicitly Revoked by Host</div>;
     if (status === 'waiting-approval') return (
         <div className="max-w-md mx-auto glass p-10 rounded-3xl text-center space-y-6">
-            <div className="mx-auto w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center animate-bounce">
-                <Heart className="text-purple-400" size={40} />
+            <div className="mx-auto w-24 h-24 bg-pink-500/10 rounded-full flex items-center justify-center animate-intimate border border-pink-500/20 kinky-glow">
+                <Heart className="text-pink-500" size={40} />
             </div>
-            <h2 className="text-2xl font-bold italic">Connection Pending</h2>
-            <p className="text-white/60">Waiting for {hostName} to approve your pairing request...</p>
+            <h2 className="text-3xl font-black italic text-gradient">WAITING FOR ENTRY</h2>
+            <p className="text-white/40 uppercase text-xs tracking-[0.2em] font-medium">Waiting for {hostName} to grant you control...</p>
         </div>
     );
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6">
-            <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative">
+        <div className="max-w-2xl mx-auto space-y-6 pb-20">
+            {/* Header / Brand */}
+            <div className="text-center pt-8 pb-4">
+                <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-purple-500/20 mb-4">
+                    <Zap className="text-purple-400" size={12} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Synchronized Session</span>
+                </div>
+                <h1 className="text-5xl font-black tracking-tighter italic text-white uppercase leading-none">
+                    <span className="text-gradient">TNT</span> SYNC
+                </h1>
+            </div>
+
+            <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative border-purple-500/20 shadow-lg shadow-purple-500/5">
                 {/* Status Indicator */}
                 <div className="absolute -top-12 right-0 flex items-center gap-2 px-3 py-1.5 glass rounded-full">
                     <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                     <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
-                        {isSocketConnected ? 'SERVER LIVE' : 'OFFLINE'}
+                        {isSocketConnected ? 'TUNNEL ACTIVE' : 'TUNNEL DOWN'}
                     </span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
-                    <span className="font-semibold text-white/80">Synchronized with <span className="text-purple-400">{hostName}</span></span>
+                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
+                    <span className="font-black text-xs uppercase tracking-widest text-white/80 italic">Controlling <span className="text-pink-500">{hostName}</span></span>
                 </div>
                 <div className="flex items-center gap-4">
                     <button
                         onClick={toggleMic}
-                        className={`p-3 rounded-2xl transition-all ${isMicOn ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-white/40'}`}
+                        className={`p-3 rounded-2xl transition-all border ${isMicOn ? 'bg-pink-500/20 text-pink-400 border-pink-500/40 kinky-glow' : 'bg-white/5 text-white/40 border-white/5'}`}
                     >
                         {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
                     </button>
                     {isMicOn && (
-                        <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden border border-white/5">
                             <motion.div
-                                className="h-full bg-pink-500"
+                                className="h-full bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]"
                                 style={{ width: `${(micLevel / 20) * 100}%` }}
                                 animate={{ opacity: micLevel > 0 ? 1 : 0.5 }}
                             />
@@ -270,12 +275,12 @@ export default function TypistView() {
                 </div>
             </div>
 
-            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-300 ${micLevel > 5 ? 'border-pink-500/30' : 'border-white/10'}`}>
+            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-500 ${micLevel > 5 ? 'border-pink-500/40 bg-pink-500/[0.03]' : 'border-white/10'}`}>
                 {/* Dynamic Background Glow */}
                 <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5"
+                    className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10"
                     animate={{
-                        opacity: micLevel > 0 ? 0.3 : 0.1,
+                        opacity: micLevel > 0 ? 0.4 : 0.1,
                         scale: micLevel > 5 ? 1.05 : 1
                     }}
                 />
@@ -284,10 +289,10 @@ export default function TypistView() {
                     {ripples.map(r => (
                         <motion.div
                             key={r.id}
-                            initial={{ scale: 0, opacity: 0.5 }}
-                            animate={{ scale: 4, opacity: 0 }}
+                            initial={{ scale: 0, opacity: 0.6 }}
+                            animate={{ scale: 6, opacity: 0 }}
                             exit={{ opacity: 0 }}
-                            className="absolute rounded-full bg-purple-500/20 pointer-events-none"
+                            className="absolute rounded-full bg-purple-500/20 pointer-events-none border border-purple-500/10"
                             style={{
                                 left: `${r.x}%`,
                                 top: `${r.y}%`,
@@ -298,19 +303,11 @@ export default function TypistView() {
                             }}
                         />
                     ))}
-                    {micLevel > 10 && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 0.2 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-pink-500/20 pointer-events-none"
-                        />
-                    )}
                 </AnimatePresence>
 
                 <textarea
-                    className="w-full flex-grow bg-transparent text-2xl font-light placeholder:text-white/10 resize-none focus:outline-none leading-relaxed z-10"
-                    placeholder="Whisper what you want..."
+                    className="w-full flex-grow bg-transparent text-2xl font-bold placeholder:text-white/5 resize-none focus:outline-none leading-relaxed z-10 text-white shadow-none border-none outline-none appearance-none"
+                    placeholder="TYPE HERE TO SYNC VIBRATIONS..."
                     value={text}
                     onChange={(e) => {
                         setText(e.target.value);
@@ -321,38 +318,24 @@ export default function TypistView() {
 
                 <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5 z-10">
                     <div className="flex flex-col gap-2">
-                        <div className="flex gap-4 text-white/40 text-[10px] uppercase font-bold tracking-widest">
-                            <span className="flex items-center gap-2"><Keyboard size={12} className="text-purple-400" /> Keys sync pulses</span>
-                            <span className="flex items-center gap-2"><Mic size={12} className="text-pink-400" /> Mic syncs air/vibe</span>
+                        <div className="flex gap-4 text-white/40 text-[10px] uppercase font-black tracking-[0.2em] italic">
+                            <span className="flex items-center gap-2"><Keyboard size={12} className="text-purple-400" /> KEYBOARD PULSE (9x)</span>
+                            <span className="flex items-center gap-2"><Mic size={12} className="text-pink-400" /> VOICE REACTIVE</span>
                         </div>
-                        {isMicOn && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-[8px] text-pink-400 font-black animate-pulse">VOICE LIVE</span>
-                                <div className="flex gap-0.5 items-end h-3">
-                                    {[...Array(5)].map((_, i) => (
-                                        <motion.div
-                                            key={i}
-                                            className="w-1 bg-pink-500/50 rounded-full"
-                                            animate={{ height: micLevel > (i * 2) ? '100%' : '20%' }}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                     <button
-                        className="button-premium flex items-center gap-2 group py-4 px-10 rounded-2xl"
+                        className="button-premium flex items-center gap-3 group px-12"
                         onClick={sendSurge}
                     >
-                        SUBMIT SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-pulse" />
+                        FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
                     </button>
                 </div>
             </div>
 
             {favorites.length > 0 && (
-                <div className="glass p-8 rounded-3xl space-y-4">
-                    <h3 className="flex items-center gap-2 font-bold text-white/60 uppercase text-sm tracking-wider">
-                        <History size={16} /> Favorite Responses (Auto-Loop)
+                <div className="glass p-10 rounded-[2.5rem] space-y-6">
+                    <h3 className="flex items-center gap-2 font-black text-white/40 uppercase text-xs tracking-widest italic border-b border-white/5 pb-4">
+                        <History size={16} className="text-purple-500" /> Loop Favorite Commands
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {favorites.map(fav => (
@@ -360,11 +343,11 @@ export default function TypistView() {
                                 key={fav.id}
                                 onClick={() => replayFavorite(fav)}
                                 disabled={isReplaying}
-                                className="text-left p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group relative overflow-hidden"
+                                className="text-left p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-pink-500/50 hover:bg-pink-500/[0.03] transition-all group relative overflow-hidden"
                             >
-                                <p className="text-sm line-clamp-1">{fav.text}</p>
+                                <p className="text-sm font-bold text-white leading-relaxed line-clamp-2 italic">"{fav.text}"</p>
                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Play size={16} className="text-purple-400" />
+                                    <Play size={16} className="text-pink-500 fill-current" />
                                 </div>
                             </button>
                         ))}
@@ -372,9 +355,47 @@ export default function TypistView() {
                 </div>
             )}
 
-            <div className="text-center text-white/20 text-xs tracking-widest uppercase">
-                Veroe Sync Engine v1.0 • Secure LDR Protocol
-            </div>
+            {/* Privacy & Reassurance Section */}
+            <section className="glass p-10 rounded-[2.5rem] border-purple-500/10 space-y-6">
+                <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+                    <div className="p-3 bg-purple-500/10 rounded-2xl">
+                        <Shield className="text-purple-400" size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black uppercase italic tracking-wider">Secure Controller Link</h3>
+                        <p className="text-[10px] text-white/40 uppercase tracking-[0.2em]">Encrypted Interaction Tunnel</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                        <div className="flex items-center gap-2 text-pink-400">
+                            <Check size={14} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Privacy Absolute</span>
+                        </div>
+                        <p className="text-[11px] text-white/60 leading-relaxed font-medium">
+                            Your text and voice input are processed in real-time and never archived. No logs, no tracks, pure sync.
+                        </p>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                        <div className="flex items-center gap-2 text-pink-400">
+                            <Check size={14} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Authorized Access Only</span>
+                        </div>
+                        <p className="text-[11px] text-white/60 leading-relaxed font-medium">
+                            Only the host can grant you access to their tunnel. Every session is unique and non-transferable.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-3xl bg-purple-500/5 border border-purple-500/10 flex items-start gap-4">
+                    <Info className="text-purple-400 shrink-0" size={18} />
+                    <p className="text-[11px] text-white/50 leading-relaxed uppercase tracking-tight font-medium">
+                        TNTSYNC uses direct socket streaming to reduce latency below 100ms. This connection is inline with Lovense TOS for remote cloud control.
+                    </p>
+                </div>
+            </section>
         </div>
     );
 }
