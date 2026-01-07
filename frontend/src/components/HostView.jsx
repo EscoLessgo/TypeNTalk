@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight, Sparkles } from 'lucide-react';
+import { Share2, Shield, Power, Smartphone, Copy, Check, Info, StepForward, ArrowRight, Sparkles, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
