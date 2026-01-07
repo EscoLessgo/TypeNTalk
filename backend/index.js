@@ -253,7 +253,7 @@ io.on('connection', (socket) => {
             message: `SERVER RECEIVED CLICK FOR ${uid}. CONNECTING TO LOVENSE...`,
             url: 'local'
         });
-        sendCommand(uid, 'vibrate', 20, 6, socket);
+        sendCommand(uid, 'Vibrate', 20, 6, socket);
     });
 
     socket.on('run-diagnostics', async ({ uid }) => {
@@ -389,7 +389,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 token: token,
                 uid: uid,
                 apiVer: 1,
-                timeSec: duration
+                sec: duration,      // For V1 Standard API
+                timeSec: duration   // For V2 LAN API
             };
 
             if (isV2) {
@@ -403,7 +404,7 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
             if (toyId) payload.toyId = toyId;
 
             console.log(`[LOVENSE] Dispatching via ${domain} (${isV2 ? 'V2' : 'V1'}) | Action: ${payload.action || payload.command}`);
-            const response = await axios.post(url, payload, { timeout: 8000 });
+            const response = await axios.post(url, payload, { timeout: 2500 });
 
             // CRITICAL SUCCESS CHECK: Must have result=true/1/'success'. 
             // Lovense server often returns code:200 even if the toy is offline!
@@ -426,14 +427,16 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
 
             if (isSuccess) return response.data;
         } catch (e) {
-            const errMsg = `NETWORK ERROR: ${e.message} (Is Lovense API down?)`;
-            console.error(`[LOVENSE] Network error for ${url.split('/')[2]}:`, e.message);
-
-            const feedback = { success: false, message: errMsg, url: url.split('/')[2] };
-            io.to(`host:${uid}`).emit('api-feedback', feedback);
-            if (directSocket) directSocket.emit('api-feedback', feedback);
+            const errMsg = `FAILOVER (${url.split('/')[2]}): ${e.message}`;
+            console.warn(`[LOVENSE] Failover trigger:`, e.message);
+            // Don't emit error to user yet, wait for next fallback
         }
     }
+
+    // If we've exhausted all URLs and none succeeded
+    const finalErr = "ALL TARGET DOMAINS FAILED OR REJECTED SIGNAL";
+    io.to(`host:${uid}`).emit('api-feedback', { success: false, message: finalErr });
+    if (directSocket) directSocket.emit('api-feedback', { success: false, message: finalErr });
 }
 
 // Fallback for React routing - must be AFTER all other routes

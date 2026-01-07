@@ -105,7 +105,20 @@ export default function HostView() {
             socket.off('typing-draft');
             socket.off('api-feedback');
         };
-    }, []); // Empty dependency array to prevent effect re-runs on name change
+    }, []);
+
+    // Session Persistence: Auto-rejoin if UID in localStorage
+    useEffect(() => {
+        const savedUid = localStorage.getItem('lovense_uid');
+        if (savedUid && isSocketConnected && status === 'setup') {
+            console.log('[SESSION] Restoring host session:', savedUid);
+            setCustomName(savedUid);
+            socket.emit('join-host', savedUid);
+            createLink(savedUid);
+            setStatus('connected');
+            // Note: We don't have toy metadata here, but the server does if it was linked.
+        }
+    }, [isSocketConnected, status]);
 
     const startSession = async () => {
         const baseId = customName.trim().toLowerCase();
@@ -114,8 +127,13 @@ export default function HostView() {
             return;
         }
 
-        // Generate a slightly more unique ID to prevent collisions on the Lovense network
-        const uniqueId = `${baseId}_${Math.random().toString(36).substring(2, 6)}`;
+        // Reuse existing UID if it belongs to the same base name, otherwise generate new
+        const savedUid = localStorage.getItem('lovense_uid');
+        let uniqueId = savedUid;
+
+        if (!savedUid || !savedUid.startsWith(baseId)) {
+            uniqueId = `${baseId}_${Math.random().toString(36).substring(2, 6)}`;
+        }
 
         setIsLoading(true);
         setError(null);
