@@ -378,8 +378,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('join-typist', (slug) => {
+        if (!slug) return;
         socket.join(`typist:${slug}`);
-        console.log(`Typist for ${slug} joined room`);
+        console.log(`[SOCKET] Typist for ${slug} joined room (Socket: ${socket.id})`);
+
+        // Notify the host that a typist is actually present
+        // We'd need to find the host for this slug, but for now we just log it
     });
 
     socket.on('latency-ping', (startTime, cb) => {
@@ -427,10 +431,19 @@ io.on('connection', (socket) => {
         console.log(`[SIGNAL] Host ${uid} -> Typist ${slug} (Room Size: ${roomSize}) | Type: ${type}`);
 
         if (roomSize === 0) {
-            console.warn(`[SIGNAL] Warning: Room ${room} is EMPTY. Typist might have disconnected or is in a different room.`);
+            console.warn(`[SIGNAL] Warning: Room ${room} is EMPTY. Signal dropped.`);
+            socket.emit('api-feedback', {
+                success: false,
+                message: "SIGNAL NOT DELIVERED: Partner is offline or disconnected."
+            });
+            return;
         }
 
         io.to(room).emit('host-feedback', { type });
+        socket.emit('api-feedback', {
+            success: true,
+            message: `Feedback Delivered to Partner (${type.toUpperCase()})`
+        });
     });
 
     socket.on('set-base-floor', ({ uid, level }) => {

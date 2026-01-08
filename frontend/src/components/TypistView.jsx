@@ -64,7 +64,18 @@ export default function TypistView() {
         socket.on('approval-status', (data = {}) => {
             const { approved } = data;
             console.log(`[SOCKET] Approval status received: ${approved}`);
-            setStatus(approved ? 'connected' : 'denied');
+            if (approved === true) {
+                setStatus('connected');
+            } else if (approved === false) {
+                // If denied or reset, go back to entry so they can re-request
+                setStatus('entry');
+                setNotifications(prev => [{
+                    id: Date.now(),
+                    type: 'bad',
+                    msg: "Session Reset: Please re-verify your name.",
+                    icon: 'shield'
+                }, ...prev].slice(0, 3));
+            }
         });
 
         socket.on('host-feedback', (data = {}) => {
@@ -356,15 +367,15 @@ export default function TypistView() {
                                 animate={{ x: 0, opacity: 1, scale: 1 }}
                                 exit={{ x: 100, opacity: 0, scale: 0.8 }}
                                 className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'good' ? 'border-green-500 bg-green-500/10' :
-                                        n.type === 'bad' ? 'border-red-500 bg-red-500/10' :
-                                            n.type === 'climax' ? 'border-pink-500 bg-pink-500/10 kinky-glow-pink' :
-                                                n.type === 'surge' ? 'border-purple-500 bg-purple-500/10' :
-                                                    'border-white/10 bg-white/5'
+                                    n.type === 'bad' ? 'border-red-500 bg-red-500/10' :
+                                        n.type === 'climax' ? 'border-pink-500 bg-pink-500/10 kinky-glow-pink' :
+                                            n.type === 'surge' ? 'border-purple-500 bg-purple-500/10' :
+                                                'border-white/10 bg-white/5'
                                     }`}
                             >
                                 <div className={`p-2 rounded-xl ${n.type === 'good' ? 'bg-green-500/20 text-green-400' :
-                                        n.type === 'bad' ? 'bg-red-500/20 text-red-400' :
-                                            'bg-pink-500/20 text-pink-400'
+                                    n.type === 'bad' ? 'bg-red-500/20 text-red-400' :
+                                        'bg-pink-500/20 text-pink-400'
                                     }`}>
                                     {n.type === 'good' && <ThumbsUp size={18} />}
                                     {n.type === 'bad' && <ThumbsDown size={18} />}

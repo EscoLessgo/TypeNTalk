@@ -213,8 +213,10 @@ export default function HostView() {
         const savedUid = localStorage.getItem('lovense_uid');
         let uniqueId = savedUid;
 
-        if (!savedUid || !savedUid.startsWith(baseId)) {
-            uniqueId = `${baseId}_${Math.random().toString(36).substring(2, 6)}`;
+        if (!savedUid || !savedUid.startsWith(baseId) || status === 'setup') {
+            // If they are rotating, OR if no ID exists, create a fresh unique hash
+            const hash = Math.random().toString(36).substring(2, 8).toUpperCase();
+            uniqueId = `${baseId}_${hash}`;
         }
 
         setIsLoading(true);
