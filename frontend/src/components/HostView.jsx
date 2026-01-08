@@ -664,6 +664,12 @@ export default function HostView() {
                                     <Smartphone size={20} /> Open Lovense App
                                 </a>
                                 <button
+                                    onClick={testVibration}
+                                    className="w-full py-5 bg-white/5 border-2 border-white/10 text-white rounded-2xl text-xs font-black tracking-[0.3em] uppercase flex items-center justify-center gap-3 hover:bg-white/10 transition-all"
+                                >
+                                    <Zap size={20} className="text-yellow-400" /> Test Hardware
+                                </button>
+                                <button
                                     onClick={bypassHandshake}
                                     disabled={isLoading}
                                     className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30 disabled:opacity-50"
