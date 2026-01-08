@@ -34,6 +34,8 @@ export default function TypistView() {
     const [hostFeedback, setHostFeedback] = useState(null);
     const [activePreset, setActivePreset] = useState('none');
     const [isClimaxRequested, setIsClimaxRequested] = useState(false);
+    const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
+    const [latency, setLatency] = useState(0);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -82,6 +84,18 @@ export default function TypistView() {
         };
     }, [slug]);
 
+    useEffect(() => {
+        if (!isSocketConnected) return;
+        const interval = setInterval(() => {
+            const start = Date.now();
+            socket.emit('latency-ping', start, (startTime) => {
+                const diff = Date.now() - startTime;
+                setLatency(diff);
+            });
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [isSocketConnected]);
+
     const checkSlug = async () => {
         const cleanSlug = (slug || '').trim();
         if (!cleanSlug) {
@@ -107,9 +121,8 @@ export default function TypistView() {
                 console.log('[TYPIST] Status: connected');
                 setStatus('connected');
             } else {
-                console.log('[TYPIST] Status: waiting-approval');
-                setStatus('waiting-approval');
-                socket.emit('request-approval', { slug: cleanSlug });
+                console.log('[TYPIST] Status: entry');
+                setStatus('entry');
             }
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
@@ -259,6 +272,45 @@ export default function TypistView() {
             </div>
             <h2 className="text-3xl font-black italic text-gradient">WAITING FOR ENTRY</h2>
             <p className="text-white/40 uppercase text-xs tracking-[0.2em] font-medium">Waiting for {hostName} to grant you control...</p>
+            <div className="pt-4">
+                <span className="text-[10px] text-white/20 font-black uppercase tracking-widest">Identifying as: {typistName}</span>
+            </div>
+        </div>
+    );
+
+    if (status === 'entry') return (
+        <div className="max-w-md mx-auto">
+            <div className="glass p-10 rounded-[2.5rem] space-y-8 animate-in fade-in zoom-in-95">
+                <div className="text-center space-y-2">
+                    <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">CONTROLLER ENTRY</h2>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest leading-relaxed">
+                        Identify yourself before connecting to {hostName}'s session.
+                    </p>
+                </div>
+
+                <div className="space-y-4">
+                    <input
+                        type="text"
+                        placeholder="YOUR DISCRIMINATOR / NAME..."
+                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-xl font-black focus:border-pink-500 outline-none uppercase transition-all placeholder:text-white/5"
+                        value={typistName}
+                        onChange={(e) => setTypistName(e.target.value)}
+                    />
+                </div>
+
+                <button
+                    onClick={() => {
+                        if (!typistName.trim()) return;
+                        localStorage.setItem('typist_name', typistName.trim());
+                        setStatus('waiting-approval');
+                        socket.emit('request-approval', { slug, name: typistName.trim() });
+                    }}
+                    disabled={!typistName.trim()}
+                    className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-pink-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                    REQUEST CONTROL <Zap size={24} />
+                </button>
+            </div>
         </div>
     );
 
@@ -456,11 +508,19 @@ export default function TypistView() {
 
             <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative border-purple-500/20 shadow-lg shadow-purple-500/5">
                 {/* Status Indicator */}
-                <div className="absolute -top-12 right-0 flex items-center gap-2 px-3 py-1.5 glass rounded-full">
-                    <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
-                        {isSocketConnected ? 'TUNNEL ACTIVE' : 'TUNNEL DOWN'}
-                    </span>
+                <div className="absolute -top-12 right-0 flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-full">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${latency > 150 ? 'text-red-400' : latency > 80 ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {latency}ms
+                        </span>
+                        <Activity size={10} className={latency > 150 ? 'text-red-400' : 'text-green-400'} />
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-full">
+                        <div className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">
+                            {isSocketConnected ? 'TUNNEL ACTIVE' : 'TUNNEL DOWN'}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3">

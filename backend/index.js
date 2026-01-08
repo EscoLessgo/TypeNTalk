@@ -270,23 +270,24 @@ io.on('connection', (socket) => {
         console.log(`Typist for ${slug} joined room`);
     });
 
-    socket.on('request-approval', async ({ slug }) => {
+    socket.on('latency-ping', (startTime, cb) => {
+        if (typeof cb === 'function') cb(startTime);
+    });
+
+    socket.on('request-approval', async ({ slug, name }) => {
         const conn = await prisma.connection.findUnique({
             where: { slug },
             include: { host: true }
         });
         if (conn) {
-            // AUTO-APPROVE for simplified UX
-            await prisma.connection.update({
-                where: { slug },
-                data: { approved: true }
-            });
-            io.to(`typist:${slug}`).emit('approval-status', { approved: true });
-            io.to(`host:${conn.host.uid}`).emit('approval-request', { slug });
+            console.log(`[APPROVAL] Typist "${name}" requesting entry to ${slug}`);
+            // Send request to host with the name
+            io.to(`host:${conn.host.uid}`).emit('approval-request', { slug, name });
         }
     });
 
     socket.on('approve-typist', async ({ slug, approved }) => {
+        console.log(`[APPROVAL] Host ${approved ? 'APPROVED' : 'DENIED'} slug ${slug}`);
         await prisma.connection.update({
             where: { slug },
             data: { approved }

@@ -42,6 +42,7 @@ export default function HostView() {
     const [activePreset, setActivePreset] = useState('none');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [shouldShake, setShouldShake] = useState(false);
+    const [latency, setLatency] = useState(0);
     const audioRef = useRef(null);
 
 
@@ -72,11 +73,11 @@ export default function HostView() {
 
         socket.on('approval-request', (data = {}) => {
             console.log('[SOCKET] Approval request:', data);
-            const { slug: typistSlug } = data;
+            const { slug: typistSlug, name } = data;
             if (!typistSlug) return;
             setTypists(prev => {
                 if (prev.find(t => t.slug === typistSlug)) return prev;
-                return [...prev, { slug: typistSlug }];
+                return [...prev, { slug: typistSlug, name: name || 'Anonymous' }];
             });
         });
 
@@ -130,6 +131,17 @@ export default function HostView() {
             socket.off('api-feedback');
         };
     }, []);
+
+    useEffect(() => {
+        if (!isSocketConnected) return;
+        const interval = setInterval(() => {
+            const start = Date.now();
+            socket.emit('latency-ping', start, (startTime) => {
+                setLatency(Date.now() - startTime);
+            });
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [isSocketConnected]);
 
     const restorationAttempted = useRef(false);
     useEffect(() => {
@@ -391,6 +403,12 @@ export default function HostView() {
 
             {/* Status Indicator */}
             <div className="absolute top-8 right-8 flex items-center gap-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-full">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${latency > 150 ? 'text-red-400' : latency > 80 ? 'text-yellow-400' : 'text-green-400'}`}>
+                        {latency}ms
+                    </span>
+                    <Activity size={10} className={latency > 150 ? 'text-red-400' : 'text-green-400'} />
+                </div>
                 <button
                     onClick={() => setShowGuide(true)}
                     className="p-1.5 glass rounded-full text-white/40 hover:text-purple-400 transition-colors"
@@ -650,6 +668,54 @@ export default function HostView() {
 
                     {/* COLUMN 2: Live Feeds (Center) */}
                     <div className="lg:col-span-6 space-y-6 order-1 lg:order-2">
+                        {/* Pending Approvals */}
+                        <AnimatePresence>
+                            {typists.length > 0 && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="glass p-6 rounded-[2rem] border-pink-500/40 bg-pink-500/[0.05] space-y-4 shadow-xl shadow-pink-500/10">
+                                        <div className="flex items-center gap-2 text-pink-400 text-xs font-black uppercase tracking-widest">
+                                            <Zap size={14} className="animate-pulse" /> PENDING CONTROLLERS
+                                        </div>
+                                        <div className="space-y-3">
+                                            {typists.map(t => (
+                                                <div key={t.slug} className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-pink-500/20">
+                                                    <div>
+                                                        <p className="text-sm font-black text-white uppercase italic tracking-tight">{t.name}</p>
+                                                        <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Wants Control</p>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                socket.emit('approve-typist', { slug: t.slug, approved: true });
+                                                                setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                            }}
+                                                            className="px-6 py-2 bg-green-500 text-black text-[10px] font-black uppercase rounded-xl hover:bg-green-400 transition-colors"
+                                                        >
+                                                            ALLOW
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                socket.emit('approve-typist', { slug: t.slug, approved: false });
+                                                                setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                            }}
+                                                            className="px-4 py-2 bg-red-500/20 text-red-500 text-[10px] font-black uppercase rounded-xl hover:bg-red-500/40 transition-colors border border-red-500/20"
+                                                        >
+                                                            DENY
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         {/* Live Typist Feed */}
                         <AnimatePresence mode="wait">
                             {typingDraft ? (
