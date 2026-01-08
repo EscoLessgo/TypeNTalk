@@ -219,6 +219,9 @@ export default function HostView() {
 
         setIsLoading(true);
         setError(null);
+        setCustomName(uniqueId);
+        localStorage.setItem('lovense_uid', uniqueId);
+
         try {
             socket.emit('join-host', uniqueId);
             const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uniqueId}`, { timeout: 8000 });
@@ -226,9 +229,6 @@ export default function HostView() {
                 setQrCode(res.data.qr);
                 setPairingCode(res.data.code);
                 setStatus('qr');
-                // Store the unique ID for later
-                setCustomName(uniqueId);
-                localStorage.setItem('lovense_uid', uniqueId);
             } else {
                 setError('Unexpected response from server');
                 // Ensure we reset loading state so user can try again
@@ -537,25 +537,38 @@ export default function HostView() {
                                     className="bg-red-500/10 border border-red-500/20 p-5 rounded-2xl text-red-400 text-xs font-bold uppercase tracking-wider text-center space-y-4"
                                 >
                                     <div className="space-y-1">
-                                        <p>{typeof error === 'string' ? error : error.message || 'Error occurred'}</p>
-                                        {error.details && (
-                                            <p className="text-[10px] opacity-50 lowercase font-mono">
-                                                {typeof error.details === 'object' ? JSON.stringify(error.details) : error.details}
-                                            </p>
-                                        )}
+                                        <div className="flex items-center justify-center gap-2 mb-2">
+                                            <Info className="text-red-500" size={16} />
+                                            <span className="font-black">LOVENSE IP BLOCK DETECTED</span>
+                                        </div>
+                                        <p className="leading-snug">
+                                            {typeof error === 'string' ? error : error.message || 'Error occurred'}
+                                        </p>
+                                        <p className="text-[10px] opacity-70 font-medium bg-red-500/10 p-2 rounded-lg mt-2 italic">
+                                            "IP {typeof error.details === 'string' && error.details.includes('162.') ? '162.x.x.x' : 'restricted'} for frequent access"
+                                            is a block on the Railway server, not your internet.
+                                        </p>
                                     </div>
 
                                     {error.showBypass && (
-                                        <div className="pt-2 border-t border-red-500/10">
-                                            <p className="text-[9px] text-white/40 mb-3 leading-tight">
-                                                YOU CAN STILL USE THE APP WITHOUT A NEW QR IF YOUR TOY WAS PREVIOUSLY LINKED:
+                                        <div className="pt-2 border-t border-red-500/10 space-y-3">
+                                            <p className="text-[9px] text-white/40 leading-tight">
+                                                TRY ROTATING YOUR ID OR USE BYPASS IF LINKED PREVIOUSLY:
                                             </p>
-                                            <button
-                                                onClick={bypassHandshake}
-                                                className="w-full py-3 bg-red-500/20 hover:bg-red-600/40 text-red-400 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border border-red-500/30"
-                                            >
-                                                Force Skip to Link Generation
-                                            </button>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    onClick={resetSession}
+                                                    className="py-3 bg-white/5 hover:bg-white/10 text-white/40 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-white/10"
+                                                >
+                                                    Rotate ID
+                                                </button>
+                                                <button
+                                                    onClick={bypassHandshake}
+                                                    className="py-3 bg-red-500/20 hover:bg-red-600/40 text-red-400 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-red-500/30"
+                                                >
+                                                    Bypass QR
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </motion.div>

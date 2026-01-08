@@ -689,6 +689,7 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
             if (toyId) payload.toyId = toyId;
 
             const response = await axios.post(url, payload, { timeout: 3500 });
+            const isIpBlock = response.data.code === 50500;
             const isSuccess = response.data.result === true || response.data.result === 1 || response.data.result === 'success' || response.data.message === 'success';
 
             // If success, store this as preferred for next time
@@ -699,7 +700,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
 
             const feedback = {
                 success: isSuccess,
-                message: isSuccess ? `TOY RECEIVED SIGNAL (${domain})` : `TOY REJECTED: ${response.data.message || response.data.code || 'Offline'}`,
+                message: isSuccess ? `TOY RECEIVED SIGNAL (${domain})` :
+                    (isIpBlock ? `LOVENSE BLOCK: Server IP Restricted. Try again in 5min.` : `TOY REJECTED: ${response.data.message || response.data.code || 'Offline'}`),
                 code: response.data.code,
                 url: domain
             };
