@@ -100,34 +100,60 @@ app.get('/api/lovense/qr', async (req, res) => {
 
     try {
         const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
+        if (!token) return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN missing.' });
 
-        if (!token || token.length < 10) {
-            return res.status(500).json({ error: 'LOVENSE_DEVELOPER_TOKEN missing.' });
+        const domains = [
+            'https://api.lovense-api.com',
+            'https://api.lovense.com'
+        ];
+
+        let lastError = null;
+
+        for (const domain of domains) {
+            try {
+                console.log(`[LOVENSE] Attempting QR generation via ${domain}...`);
+                const response = await axios.post(`${domain}/api/lan/getQrCode`, {
+                    token: token,
+                    uid: username,
+                    uname: username,
+                    v: 2,
+                    apiVer: 1,
+                    type: 'standard'
+                }, { timeout: 8000 });
+
+                if (response.data && (response.data.result === true || response.data.result === 1)) {
+                    qrCache.set(username, { data: response.data.data, time: Date.now() });
+                    return res.json(response.data.data);
+                }
+
+                // If we got a specific "IP restricted" or rate limit message, don't just fail silently
+                if (response.data && response.data.code === 50500) {
+                    console.error(`[LOVENSE] ${domain} reported IP restriction:`, response.data.message);
+                    lastError = {
+                        error: 'IP Restricted by Lovense',
+                        details: 'Lovense has temporarily blocked our server IP for frequent access. This usually clears in 10-15 minutes.',
+                        raw: response.data
+                    };
+                    continue; // Try the other domain
+                }
+
+                console.warn(`[LOVENSE] ${domain} returned unsuccessful result:`, response.data);
+                lastError = response.data;
+            } catch (err) {
+                console.error(`[LOVENSE] Request to ${domain} failed:`, err.message);
+                lastError = err.message;
+            }
         }
 
-        const response = await axios.post('https://api.lovense.com/api/lan/getQrCode', {
-            token: token,
-            uid: username,
-            uname: username,
-            v: 2,
-            apiVer: 1,
-            type: 'standard'
-        }, { timeout: 10000 });
-
-        if (response.data && response.data.result) {
-            qrCache.set(username, { data: response.data.data, time: Date.now() });
-            res.json(response.data.data);
-        } else {
-            console.error('[LOVENSE] API Error:', response.data);
-            res.status(500).json({ error: 'Lovense API error', details: response.data });
-        }
-    } catch (error) {
-        console.error('Error getting QR:', error.message);
-        const isRateLimit = error.message.includes('1015') || (error.response && error.response.status === 429);
+        // If all domains failed
         res.status(500).json({
-            error: isRateLimit ? 'RATE LIMITED BY CLOUDFLARE' : 'Failed to get QR code',
-            details: isRateLimit ? 'Please wait 5 minutes. Lovense has temporarily blocked us.' : error.message
+            error: 'Lovense API Error',
+            details: lastError
         });
+
+    } catch (error) {
+        console.error('Fatal Error getting QR:', error.message);
+        res.status(500).json({ error: 'System error', details: error.message });
     }
 });
 
