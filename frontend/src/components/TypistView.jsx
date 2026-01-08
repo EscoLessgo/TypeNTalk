@@ -34,6 +34,7 @@ export default function TypistView() {
     const [hostFeedback, setHostFeedback] = useState(null);
     const [activePreset, setActivePreset] = useState('none');
     const [isClimaxRequested, setIsClimaxRequested] = useState(false);
+    const [notifications, setNotifications] = useState([]); // Array of {id, type, message, time}
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
@@ -61,8 +62,11 @@ export default function TypistView() {
         });
 
         socket.on('host-feedback', (data = {}) => {
-            setHostFeedback(data.type);
-            setTimeout(() => setHostFeedback(null), 5000);
+            const id = Date.now();
+            const type = data.type; // 'good', 'bad'
+            const msg = type === 'good' ? "SHE LOVES IT! KEEP GOING" : "TOO INTENSE / PAUSE REQUESTED";
+            setNotifications(prev => [{ id, type, msg, icon: type === 'good' ? 'thumbsup' : 'thumbsdown' }, ...prev].slice(0, 3));
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 6000);
         });
 
         socket.on('preset-update', (data = {}) => {
@@ -72,11 +76,14 @@ export default function TypistView() {
         socket.on('climax-requested', () => {
             console.log('[SOCKET] Host is reaching climax!');
             setIsClimaxRequested(true);
+            const id = Date.now();
+            setNotifications(prev => [{ id, type: 'climax', msg: "🔥 SHE'S REACHING CLIMAX! FINISH HER! 🔥", icon: 'zap' }, ...prev].slice(0, 3));
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 10000);
         });
 
         socket.on('overdrive-status', (data = {}) => {
             setIsOverdrive(data.active);
-            if (data.active) setIsClimaxRequested(false); // Hide the prompt if they engaged overdrive
+            if (data.active) setIsClimaxRequested(false);
         });
 
         return () => {
@@ -535,16 +542,34 @@ export default function TypistView() {
                 </div>
                 <div className="flex items-center gap-4">
                     <AnimatePresence>
-                        {hostFeedback && (
-                            <motion.div
-                                initial={{ scale: 0, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ scale: 0, opacity: 0 }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-2xl border-2 ${hostFeedback === 'good' ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-red-500/20 border-red-500/50 text-red-400'}`}
-                            >
-                                {hostFeedback === 'good' ? <ThumbsUp size={16} /> : <ThumbsDown size={16} />}
-                                <span className="text-[10px] font-black uppercase tracking-widest">{hostFeedback === 'good' ? 'SHE LOVES IT' : 'TOO MUCH / PAUSE'}</span>
-                            </motion.div>
+                        {notifications.length > 0 && (
+                            <div className="fixed top-24 right-8 z-[60] flex flex-col gap-3 w-72 pointer-events-none">
+                                {notifications.map((n) => (
+                                    <motion.div
+                                        key={n.id}
+                                        initial={{ x: 100, opacity: 0, scale: 0.8 }}
+                                        animate={{ x: 0, opacity: 1, scale: 1 }}
+                                        exit={{ x: 100, opacity: 0, scale: 0.8 }}
+                                        className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'climax' ? 'border-red-500 bg-red-500/10' :
+                                            n.type === 'good' ? 'border-green-500 bg-green-500/10' :
+                                                'border-purple-500 bg-purple-500/10'
+                                            }`}
+                                    >
+                                        <div className={`p-2 rounded-xl ${n.type === 'climax' ? 'bg-red-500/20 text-red-400' :
+                                            n.type === 'good' ? 'bg-green-500/20 text-green-400' :
+                                                'bg-purple-500/20 text-purple-400'
+                                            }`}>
+                                            {n.icon === 'zap' && <Zap size={18} fill="currentColor" />}
+                                            {n.icon === 'thumbsup' && <ThumbsUp size={18} />}
+                                            {n.icon === 'thumbsdown' && <ThumbsDown size={18} />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50">Signal from Host</p>
+                                            <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n.msg}</p>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
                         )}
                     </AnimatePresence>
 

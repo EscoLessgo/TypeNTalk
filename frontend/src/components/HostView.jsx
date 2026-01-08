@@ -840,23 +840,6 @@ export default function HostView() {
                             </div>
                         </div>
 
-                        {/* Interaction Presets */}
-                        <div className="glass p-5 rounded-2xl space-y-4">
-                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest leading-none">
-                                <Activity size={12} className="text-purple-400" /> Presets
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {['none', 'pulse', 'wave', 'chaos'].map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPreset(p)}
-                                        className={`py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${activePreset === p ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
                         {/* Overrides */}
                         <div className="glass p-5 rounded-2xl space-y-4">
