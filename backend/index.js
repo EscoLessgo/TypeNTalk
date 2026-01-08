@@ -177,7 +177,9 @@ app.get('/api/lovense/qr', async (req, res) => {
 
         const domains = [
             'https://api.lovense-api.com',
-            'https://api.lovense.com'
+            'https://api.lovense.com',
+            'https://api.v-connect.com', // Additional fallback
+            'https://api-us.lovense.com'  // US-specific fallback
         ];
 
         let lastError = null;
@@ -377,13 +379,16 @@ io.on('connection', (socket) => {
         socket.emit('host:ready', { uid });
     });
 
-    socket.on('join-typist', (slug) => {
+    socket.on('join-typist', async (slug) => {
         if (!slug) return;
         socket.join(`typist:${slug}`);
         console.log(`[SOCKET] Typist for ${slug} joined room (Socket: ${socket.id})`);
 
-        // Notify the host that a typist is actually present
-        // We'd need to find the host for this slug, but for now we just log it
+        // Sync current approval status immediately
+        const conn = await getConnection(slug);
+        if (conn) {
+            socket.emit('approval-status', { approved: conn.approved });
+        }
     });
 
     socket.on('latency-ping', (startTime, cb) => {
@@ -408,16 +413,20 @@ io.on('connection', (socket) => {
     });
 
     socket.on('approve-typist', async ({ slug, approved }) => {
-        console.log(`[SOCKET] Host ${approved ? 'APPROVED' : 'DENIED'} Slug=${slug}`);
+        console.log(`[APPROVAL-COMMIT] Status -> ${approved ? 'TRUE' : 'FALSE'} for Slug=${slug} (Requested by Socket: ${socket.id})`);
 
         try {
             await prisma.connection.update({
                 where: { slug },
                 data: { approved }
             });
+            console.log(`[DB] Approval updated for ${slug}`);
         } catch (e) {
             const memConn = memoryStore.connections.get(slug);
-            if (memConn) memConn.approved = approved;
+            if (memConn) {
+                memConn.approved = approved;
+                console.log(`[MEMORY] Approval updated for ${slug}`);
+            }
         }
 
         io.to(`typist:${slug}`).emit('approval-status', { approved });
@@ -491,11 +500,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('typing-update', async ({ slug, text }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
-        if (conn) {
+        const conn = await getConnection(slug);
+        if (conn && conn.host && conn.approved) {
             io.to(`host:${conn.host.uid}`).emit('typing-draft', { text });
         }
     });
@@ -526,17 +532,18 @@ io.on('connection', (socket) => {
     // Real-time pulse from typing
     socket.on('typing-pulse', async ({ slug, intensity }) => {
         const conn = await getConnection(slug);
+        const isApproved = conn?.approved === true;
 
-        if (conn && conn.host && conn.approved) {
+        if (conn && conn.host && isApproved) {
             const room = `host:${conn.host.uid}`;
             const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
-            console.log(`[PULSE] Typing for ${slug} -> Host ${conn.host.uid} (Room Size: ${roomSize})`);
+            console.log(`[PULSE] Typing for ${slug} -> Host ${conn.host.uid} (Room Size: ${roomSize}) | Status: APPROVED`);
 
             sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
-            if (intensity > 5) {
-                console.log(`[PULSE] Ignored typing pulse. Conn exists: ${!!conn}, Host exists: ${!!conn?.host}, Approved: ${conn?.approved}`);
+            if (intensity > 2) {
+                console.warn(`[BLOCK] Illegal Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
             }
         }
     });
@@ -546,7 +553,7 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
 
         if (conn && conn.host && conn.approved) {
-            console.log(`[PULSE] Voice pulse (${intensity}) from ${slug} -> host ${conn.host.uid}`);
+            console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${conn.host.uid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
         }
@@ -555,8 +562,9 @@ io.on('connection', (socket) => {
     // Final surge
     socket.on('final-surge', async ({ slug, text, pulses }) => {
         const conn = await getConnection(slug);
+        const isApproved = conn?.approved === true;
 
-        if (conn && conn.host && conn.approved) {
+        if (conn && conn.host && isApproved) {
             const surgeIntensity = 20; // 100% power
             const duration = 3; // Fixed 3 seconds
 
@@ -573,6 +581,8 @@ io.on('connection', (socket) => {
             });
 
             io.to(`host:${conn.host.uid}`).emit('new-message', { text });
+        } else {
+            console.warn(`[BLOCK] Illegal Surge from ${slug}. Approved: ${isApproved}`);
         }
     });
 
@@ -583,9 +593,10 @@ io.on('connection', (socket) => {
 
     socket.on('trigger-climax', async ({ slug, pattern }) => {
         const conn = await getConnection(slug);
+        const isApproved = conn?.approved === true;
 
-        if (conn && conn.host && conn.approved) {
-            console.log(`[CLIMAX] Triggering climax for ${conn.host.uid}`);
+        if (conn && conn.host && isApproved) {
+            console.log(`[CLIMAX] Triggering climax for ${conn.host.uid} | Approved: ${isApproved}`);
 
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'climax', level: 20 });
             io.to(`host:${conn.host.uid}`).emit('api-feedback', {
@@ -613,7 +624,7 @@ io.on('connection', (socket) => {
 
         if (conn && conn.host && conn.approved) {
             const uid = conn.host.uid;
-            console.log(`[OVERDRIVE] Overdrive ${active ? 'ENGAGED' : 'DISENGAGED'} for ${uid}`);
+            console.log(`[OVERDRIVE] Host ${uid} via Typist ${slug} -> ${active}`);
 
             if (presets.has(uid)) {
                 clearInterval(presets.get(uid));
@@ -690,25 +701,20 @@ async function performDispatch(uid, strength, duration, directSocket) {
     if (queue) queue.lastSent = Date.now();
 
     try {
-        let host;
-        try {
-            host = await prisma.host.findUnique({ where: { uid } });
-        } catch (dbErr) {
-            host = memoryStore.hosts.get(uid);
-        }
-
+        const host = await getHost(uid);
         if (!host || !host.toys) {
-            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
+            // If no toys, try a direct broadcast to all linked devices via Lovense Cloud UID
+            return await dispatchRaw(uid, null, 'vibrate', finalStrength, duration, directSocket);
         }
 
-        const toyList = JSON.parse(host.toys);
-        const toys = Array.isArray(toyList) ? toyList : Object.values(toyList);
+        const toys = typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys;
+        const toyList = Array.isArray(toys) ? toys : Object.values(toys);
         const commands = [];
 
-        for (const toy of toys) {
+        for (const toy of toyList) {
             const tId = toy.id || toy.toyId;
-            if (tId === 'SIM' && toys.length > 1) continue;
-            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'Vibrate', strength, duration, directSocket));
+            if (tId === 'SIM' && toyList.length > 1) continue;
+            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'Vibrate', finalStrength, duration, directSocket));
         }
 
         await Promise.all(commands);
