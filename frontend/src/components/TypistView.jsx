@@ -321,10 +321,12 @@ export default function TypistView() {
 
                 <button
                     onClick={() => {
-                        if (!typistName.trim()) return;
-                        localStorage.setItem('typist_name', typistName.trim());
+                        const trimmedName = typistName.trim();
+                        if (!trimmedName) return;
+                        console.log(`[TYPIST] Requesting approval as: ${trimmedName} for slug: ${slug}`);
+                        localStorage.setItem('typist_name', trimmedName);
                         setStatus('waiting-approval');
-                        socket.emit('request-approval', { slug, name: typistName.trim() });
+                        socket.emit('request-approval', { slug, name: trimmedName });
                     }}
                     disabled={!typistName.trim()}
                     className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-pink-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"

@@ -8,18 +8,52 @@ const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
+if (!process.env.DATABASE_URL) {
+    console.warn('⚠️  DATABASE_URL is not set. Using IN-MEMORY FALLBACK.');
+}
+
 const prisma = new PrismaClient();
 
 // Fallback Memory Store (if DB is down)
 const memoryStore = {
-    hosts: new Map(),
-    connections: new Map(),
+    hosts: new Map(), // uid -> hostObject
+    connections: new Map(), // slug -> connObject
     responses: []
 };
 
-if (!process.env.DATABASE_URL) {
-    console.warn('⚠️  DATABASE_URL is not set. The app requires a PostgreSQL database to function on Railway.');
-    console.warn('👉 Go to Railway -> TypeNTalk Service -> Variables -> New Variable -> Reference -> Postgres -> DATABASE_URL');
+// Unified Data Access Helpers
+async function getHost(uid) {
+    if (!uid) return null;
+    try {
+        const host = await prisma.host.findUnique({ where: { uid } });
+        if (host) {
+            if (typeof host.toys === 'string') host.toys = JSON.parse(host.toys);
+            return host;
+        }
+    } catch (e) { }
+    return memoryStore.hosts.get(uid);
+}
+
+async function getConnection(slug) {
+    if (!slug) return null;
+    try {
+        const conn = await prisma.connection.findUnique({
+            where: { slug },
+            include: { host: true }
+        });
+        if (conn) {
+            if (conn.host && typeof conn.host.toys === 'string') conn.host.toys = JSON.parse(conn.host.toys);
+            return conn;
+        }
+    } catch (e) { }
+
+    const memConn = memoryStore.connections.get(slug);
+    if (memConn) {
+        // Hydrate host for memory connection
+        const host = await getHost(memConn.hostUid);
+        return { ...memConn, host };
+    }
+    return null;
 }
 
 const app = express();
@@ -192,44 +226,57 @@ app.post('/api/connections/create', async (req, res) => {
         const { uid } = req.body;
         if (!uid) return res.status(400).json({ error: 'Host UID required' });
 
-        let hostId;
+        let host;
         let existingSlug;
 
         try {
-            const host = await prisma.host.upsert({
+            host = await prisma.host.upsert({
                 where: { uid: uid },
                 update: { username: uid },
                 create: { uid: uid, username: uid }
             });
-            hostId = host.id;
-
-            const existing = await prisma.connection.findFirst({
-                where: { hostId: hostId },
-                orderBy: { createdAt: 'desc' }
-            });
-            if (existing && !existing.approved) {
-                existingSlug = existing.slug;
-            }
         } catch (dbErr) {
-            console.warn('[DB] Fallback to memory for connection creation');
-            const memHost = memoryStore.hosts.get(uid) || { id: `mem-${uid}`, uid };
-            hostId = memHost.id;
-
-            // Check memory for existing
-            const memExisting = Array.from(memoryStore.connections.values())
-                .find(c => c.hostId === hostId && !c.approved);
-            if (memExisting) existingSlug = memExisting.slug;
+            host = { uid, username: uid, id: `mem-${uid}` };
+            memoryStore.hosts.set(uid, host);
         }
 
-        if (existingSlug) return res.json({ slug: existingSlug });
+        // SLUG REUSE: Reuse the most recent slug for this host if it exists.
+        // This prevents the Typist from losing connection if the Host refreshes their page.
+        try {
+            const existing = await prisma.connection.findFirst({
+                where: { hostId: host.id },
+                orderBy: { createdAt: 'desc' }
+            });
+            // Reuse if less than 12 hours old
+            if (existing && (Date.now() - new Date(existing.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
+                existingSlug = existing.slug;
+            }
+        } catch (e) {
+            const memExisting = Array.from(memoryStore.connections.values())
+                .find(c => c.hostUid === uid);
+            if (memExisting && (Date.now() - new Date(memExisting.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
+                existingSlug = memExisting.slug;
+            }
+        }
+
+        if (existingSlug) {
+            console.log(`[SESSION] Reusing existing slug ${existingSlug} for host ${uid}`);
+            return res.json({ slug: existingSlug });
+        }
 
         const slug = uuidv4().substring(0, 8);
         try {
             await prisma.connection.create({
-                data: { slug, hostId: hostId, approved: false }
+                data: { slug, hostId: host.id, approved: false }
             });
         } catch (dbErr) {
-            memoryStore.connections.set(slug, { slug, hostId: hostId, approved: false, createdAt: new Date() });
+            memoryStore.connections.set(slug, {
+                slug,
+                hostId: host.id,
+                hostUid: uid,
+                approved: false,
+                createdAt: new Date()
+            });
         }
 
         res.json({ slug });
@@ -242,29 +289,8 @@ app.post('/api/connections/create', async (req, res) => {
 // Get Connection Status
 app.get('/api/connections/:slug', async (req, res) => {
     try {
-        let connection;
-        try {
-            connection = await prisma.connection.findUnique({
-                where: { slug: req.params.slug },
-                include: { host: true }
-            });
-        } catch (dbErr) {
-            console.warn('[DB] Fallback to memory for connection status');
-            connection = memoryStore.connections.get(req.params.slug);
-            if (connection) {
-                const uid = connection.hostId.startsWith('mem-') ? connection.hostId.replace('mem-', '') : 'host';
-                const memHost = memoryStore.hosts.get(uid) || { uid: uid, username: uid };
-                connection.host = memHost;
-            }
-        }
-
+        const connection = await getConnection(req.params.slug);
         if (!connection) return res.status(404).json({ error: 'Link invalid' });
-
-        // Parse JSON fields
-        if (connection.host?.toys && typeof connection.host.toys === 'string') {
-            connection.host.toys = JSON.parse(connection.host.toys);
-        }
-
         res.json(connection);
     } catch (err) {
         console.error('[API] Get connection error:', err);
@@ -302,29 +328,40 @@ io.on('connection', (socket) => {
         if (typeof cb === 'function') cb(startTime);
     });
 
-    socket.on('request-approval', async ({ slug, name }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
-        if (conn) {
-            console.log(`[APPROVAL] Typist "${name}" requesting entry to ${slug}`);
-            // Send request to host with the name
-            io.to(`host:${conn.host.uid}`).emit('approval-request', { slug, name });
+    socket.on('request-approval', async (data = {}) => {
+        const { slug, name } = data;
+        const displayName = (name && typeof name === 'string' && name.trim()) ? name.trim() : 'Anonymous';
+
+        console.log(`[SOCKET] Approval Request: Typist="${displayName}" for Slug=${slug}`);
+
+        const conn = await getConnection(slug);
+        if (conn && conn.host) {
+            console.log(`[SOCKET] Forwarding request to host: ${conn.host.uid}`);
+            io.to(`host:${conn.host.uid}`).emit('approval-request', { slug, name: displayName });
+        } else {
+            console.warn(`[SOCKET] Failed to find host for slug ${slug} during approval request`);
         }
     });
 
     socket.on('approve-typist', async ({ slug, approved }) => {
-        console.log(`[APPROVAL] Host ${approved ? 'APPROVED' : 'DENIED'} slug ${slug}`);
-        await prisma.connection.update({
-            where: { slug },
-            data: { approved }
-        });
+        console.log(`[SOCKET] Host ${approved ? 'APPROVED' : 'DENIED'} Slug=${slug}`);
+
+        try {
+            await prisma.connection.update({
+                where: { slug },
+                data: { approved }
+            });
+        } catch (e) {
+            const memConn = memoryStore.connections.get(slug);
+            if (memConn) memConn.approved = approved;
+        }
+
         io.to(`typist:${slug}`).emit('approval-status', { approved });
     });
 
-    socket.on('host-feedback', ({ uid, type, slug }) => {
-        console.log(`[FEEDBACK] Host ${uid} sent ${type} to typist ${slug}`);
+    socket.on('host-feedback', (data = {}) => {
+        const { uid, type, slug } = data;
+        console.log(`[SOCKET] Host ${uid} Signal: "${type}" -> Typist ${slug}`);
         io.to(`typist:${slug}`).emit('host-feedback', { type });
     });
 

@@ -266,10 +266,12 @@ export default function HostView() {
                 throw new Error('Could not establish connection link. Backend might be down.');
             }
         } catch (err) {
-            console.error('Bypass handshanke error:', err);
+            console.error('Bypass handshake error:', err);
             setError(err.message || 'Failed to enter test mode');
         } finally {
             setIsLoading(false);
+            // If we successfully reached 'connected' status, clear the block error
+            if (slugRef.current) setError(null);
         }
     };
 
