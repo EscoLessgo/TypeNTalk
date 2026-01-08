@@ -77,7 +77,7 @@ export default function HostView() {
             const { toys } = data;
             if (!toys) return;
             setToys(toys);
-            setStatus('connected');
+            setStatus('verified'); // Move to verification step instead of dashboard
             createLink(customNameRef.current.trim().toLowerCase());
         });
 
@@ -277,7 +277,7 @@ export default function HostView() {
             setToys({ 'SIM': { name: 'SIMULATED DEVICE', type: 'Vibrate' } });
             await createLink(id);
             if (slugRef.current) {
-                setStatus('connected');
+                setStatus('verified'); // Move to verification screen even on bypass
             } else {
                 throw new Error('Could not establish connection link. Backend might be down.');
             }
@@ -633,9 +633,6 @@ export default function HostView() {
                             <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
                                 Open the **LOVENSE CONNECT** app on your phone and SCAN this code
                             </p>
-                            <p className="text-[8px] text-purple-400/60 uppercase tracking-tighter bg-purple-500/5 py-1 px-3 rounded-full inline-block">
-                                Osci 3 Compatible • Ensure toy is Bluetooth connected in the app
-                            </p>
                         </div>
 
                         <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-purple-500/10">
@@ -652,7 +649,6 @@ export default function HostView() {
                                     {pairingCode}
                                     {copied ? <Check className="text-green-500" size={32} /> : <Copy className="text-white/10 group-hover:text-white/30" size={32} />}
                                 </p>
-                                {copied && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-green-500 text-[10px] font-black uppercase tracking-widest">Code Copied!</span>}
                             </div>
 
                             <div className="grid grid-cols-1 gap-3">
@@ -664,17 +660,11 @@ export default function HostView() {
                                     <Smartphone size={20} /> Open Lovense App
                                 </a>
                                 <button
-                                    onClick={testVibration}
-                                    className="w-full py-5 bg-white/5 border-2 border-white/10 text-white rounded-2xl text-xs font-black tracking-[0.3em] uppercase flex items-center justify-center gap-3 hover:bg-white/10 transition-all"
-                                >
-                                    <Zap size={20} className="text-yellow-400" /> Test Hardware
-                                </button>
-                                <button
                                     onClick={bypassHandshake}
                                     disabled={isLoading}
-                                    className="w-full py-4 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-red-500/30 disabled:opacity-50"
+                                    className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
                                 >
-                                    {isLoading ? 'BYPASSING...' : '⚠️ FORCE SKIP TO LINK (IF APP HANGS)'}
+                                    {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
                                 </button>
                                 <button
                                     onClick={resetSession}
@@ -683,6 +673,44 @@ export default function HostView() {
                                     Wait, take me back to Step 1
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {status === 'verified' && (
+                <div className="max-w-xl mx-auto">
+                    <div className="glass p-12 rounded-[3rem] flex flex-col items-center space-y-10 animate-in zoom-in-95 border-green-500/20 shadow-2xl shadow-green-500/5">
+                        <div className="text-center space-y-3 w-full">
+                            <div className="mx-auto w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center border border-green-500/20 mb-4">
+                                <Shield className="text-green-500" size={40} />
+                            </div>
+                            <h2 className="text-3xl font-black italic text-gradient uppercase">Hardware Linked</h2>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                Your session is ready. Please test connectivity before starting.
+                            </p>
+                        </div>
+
+                        <div className="w-full space-y-4">
+                            <button
+                                onClick={testVibration}
+                                className="w-full py-8 bg-white/5 border-2 border-white/10 text-white rounded-3xl text-xl font-black tracking-[0.2em] uppercase flex items-center justify-center gap-4 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all group"
+                            >
+                                <Zap size={32} className="text-yellow-400 group-hover:scale-125 transition-transform" /> TEST VIBRATION
+                            </button>
+
+                            <p className="text-[9px] text-center text-white/20 uppercase font-black italic">
+                                Click the button above. If your toy vibrates, you are 100% connected.
+                            </p>
+                        </div>
+
+                        <div className="w-full pt-6 border-t border-white/5">
+                            <button
+                                onClick={() => setStatus('connected')}
+                                className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20"
+                            >
+                                OPEN DASHBOARD <ArrowRight size={24} />
+                            </button>
                         </div>
                     </div>
                 </div>
