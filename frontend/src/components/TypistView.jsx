@@ -62,6 +62,7 @@ export default function TypistView() {
         });
 
         socket.on('host-feedback', (data = {}) => {
+            console.log('[SOCKET] Host feedback:', data);
             const id = Date.now();
             const type = data.type; // 'good', 'bad'
             const msg = type === 'good' ? "SHE LOVES IT! KEEP GOING" : "TOO INTENSE / PAUSE REQUESTED";
@@ -93,6 +94,7 @@ export default function TypistView() {
             socket.off('host-feedback');
             socket.off('preset-update');
             socket.off('climax-requested');
+            socket.off('overdrive-status');
             stopMic();
         };
     }, [slug]);
@@ -172,6 +174,12 @@ export default function TypistView() {
         if (!text.trim()) return;
         const pulses = [{ time: 0, intensity: 20, duration: 3 }];
         socket.emit('final-surge', { slug, text, pulses });
+
+        // Local notification
+        const id = Date.now();
+        setNotifications(prev => [{ id, type: 'surge', msg: "🌊 FINAL SURGE TRIGGERED!", icon: 'zap' }, ...prev].slice(0, 3));
+        setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
+
         setIntensity(100);
         setTimeout(() => setIntensity(0), 3000);
         setText('');

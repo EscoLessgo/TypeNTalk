@@ -43,6 +43,8 @@ export default function HostView() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [shouldShake, setShouldShake] = useState(false);
     const [latency, setLatency] = useState(0);
+    const [isOverdrive, setIsOverdrive] = useState(false);
+    const [notifications, setNotifications] = useState([]);
     const audioRef = useRef(null);
 
 
@@ -82,10 +84,18 @@ export default function HostView() {
         });
 
         socket.on('incoming-pulse', (data = {}) => {
+            console.log('[SOCKET] Incoming pulse:', data);
             const { source, level } = data;
             const finalLevel = isMuted ? 0 : Math.min((level || 5) * 5, 100);
             setIntensity(finalLevel);
             setLastAction(source || 'active');
+
+            if (source === 'surge' || source === 'climax') {
+                const id = Date.now();
+                const msg = source === 'surge' ? "🌊 FINAL SURGE INCOMING!" : "🔥 CLIMAX TRIGGERED!";
+                setNotifications(prev => [{ id, type: source, msg, icon: 'zap' }, ...prev].slice(0, 3));
+                setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
+            }
 
             // Record event for heatmap
             setSessionEvents(prev => [...prev, { timestamp: Date.now(), intensity: (level || 5) }]);
@@ -100,6 +110,15 @@ export default function HostView() {
             }
 
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
+        });
+
+        socket.on('overdrive-status', (data = {}) => {
+            console.log('[SOCKET] Overdrive status:', data);
+            setIsOverdrive(data.active);
+            const id = Date.now();
+            const msg = data.active ? "⚠️ OVERDRIVE ENGAGED: 100% POWER!" : "Overdrive Disengaged.";
+            setNotifications(prev => [{ id, type: 'overdrive', msg, icon: 'zap' }, ...prev].slice(0, 3));
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
         });
 
         socket.on('new-message', (data = {}) => {
@@ -129,6 +148,7 @@ export default function HostView() {
             socket.off('new-message');
             socket.off('typing-draft');
             socket.off('api-feedback');
+            socket.off('overdrive-status');
         };
     }, []);
 
@@ -277,6 +297,7 @@ export default function HostView() {
     };
 
     const sendFeedback = (type) => {
+        console.log(`[HOST] Sending feedback: ${type}`);
         socket.emit('host-feedback', { uid: customName, type, slug });
         // Visual feedback locally
         setApiFeedback({ success: true, message: `Feedback Sent: ${type.toUpperCase()}` });
@@ -305,6 +326,35 @@ export default function HostView() {
 
     return (
         <div className={`w-full mx-auto space-y-8 pb-20 relative transition-transform duration-75 ${shouldShake ? 'shake' : ''}`}>
+            {/* Notification System */}
+            <AnimatePresence>
+                {notifications.length > 0 && (
+                    <div className="fixed top-24 right-8 z-[60] flex flex-col gap-3 w-72 pointer-events-none">
+                        {notifications.map((n) => (
+                            <motion.div
+                                key={n.id}
+                                initial={{ x: 100, opacity: 0, scale: 0.8 }}
+                                animate={{ x: 0, opacity: 1, scale: 1 }}
+                                exit={{ x: 100, opacity: 0, scale: 0.8 }}
+                                className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'climax' || n.type === 'overdrive' ? 'border-red-500 bg-red-500/10' :
+                                    n.type === 'surge' ? 'border-purple-500 bg-purple-500/10' :
+                                        'border-white/10 bg-white/5'
+                                    }`}
+                            >
+                                <div className={`p-2 rounded-xl ${n.type === 'climax' || n.type === 'overdrive' ? 'bg-red-500/20 text-red-400' :
+                                    'bg-purple-500/20 text-purple-400'
+                                    }`}>
+                                    <Zap size={18} fill={n.type === 'overdrive' ? "currentColor" : "none"} />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50">Action from Typist</p>
+                                    <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n.msg}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+            </AnimatePresence>
             <AnimatePresence>
                 {showGuide && (
                     <>
@@ -597,8 +647,8 @@ export default function HostView() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
                     {/* COLUMN 1: Visuals & Core Status (Left) */}
                     <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8 order-2 lg:order-1">
-                        <div className="glass p-6 rounded-[2rem] border-green-500/20 bg-green-500/[0.02] relative overflow-hidden">
-                            <PulseParticles intensity={intensity} />
+                        <div className={`glass p-6 rounded-[2rem] border-green-500/20 relative overflow-hidden transition-all duration-500 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : 'bg-green-500/[0.02]'}`}>
+                            <PulseParticles intensity={isOverdrive ? 100 : intensity} />
                             <div className="flex flex-col items-center text-center space-y-4 relative z-10">
                                 <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
                                     <Shield className="text-green-500" size={32} />
