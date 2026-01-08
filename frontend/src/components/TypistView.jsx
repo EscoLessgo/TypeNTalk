@@ -354,6 +354,10 @@ export default function TypistView() {
         </div>
     );
 
+    if (status !== 'connected') {
+        return <div className="text-center p-20 animate-pulse text-white/20 font-black uppercase tracking-widest">Awaiting Control Approval...</div>;
+    }
+
     return (
         <div className="max-w-5xl mx-auto space-y-6 pb-20 relative">
             {/* Notification System Overlay */}

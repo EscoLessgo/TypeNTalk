@@ -77,7 +77,8 @@ export default function HostView() {
             const { toys } = data;
             if (!toys) return;
             setToys(toys);
-            setStatus('verified'); // Move to verification step instead of dashboard
+            setStatus('verified'); // Move to verification step
+            // Link is already created/reset in startSession, but we refresh it here to be safe
             createLink(customNameRef.current.trim().toLowerCase());
         });
 
@@ -235,6 +236,9 @@ export default function HostView() {
 
         try {
             socket.emit('join-host', uniqueId);
+            // RESET APPROVAL IMMEDIATELY: Ensure any existing link for this UID is locked
+            await createLink(uniqueId);
+
             const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${uniqueId}`, { timeout: 8000 });
             if (res.data && res.data.qr) {
                 setQrCode(res.data.qr);
@@ -242,7 +246,6 @@ export default function HostView() {
                 setStatus('qr');
             } else {
                 setError('Unexpected response from server');
-                // Ensure we reset loading state so user can try again
             }
         } catch (err) {
             console.error('Start session error:', err);
