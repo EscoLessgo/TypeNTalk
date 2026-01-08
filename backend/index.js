@@ -704,7 +704,7 @@ async function performDispatch(uid, strength, duration, directSocket) {
         const host = await getHost(uid);
         if (!host || !host.toys) {
             // If no toys, try a direct broadcast to all linked devices via Lovense Cloud UID
-            return await dispatchRaw(uid, null, 'vibrate', finalStrength, duration, directSocket);
+            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
         }
 
         const toys = typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys;
@@ -714,7 +714,7 @@ async function performDispatch(uid, strength, duration, directSocket) {
         for (const toy of toyList) {
             const tId = toy.id || toy.toyId;
             if (tId === 'SIM' && toyList.length > 1) continue;
-            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'Vibrate', finalStrength, duration, directSocket));
+            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'vibrate', strength, duration, directSocket));
         }
 
         await Promise.all(commands);
