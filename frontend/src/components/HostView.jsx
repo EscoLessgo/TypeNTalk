@@ -577,17 +577,17 @@ export default function HostView() {
 
             {status === 'connected' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
-                    {/* LEFT COLUMN: Visuals & Core Status */}
-                    <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                        <div className="glass p-8 rounded-[2.5rem] border-green-500/20 bg-green-500/[0.02] relative overflow-hidden">
+                    {/* COLUMN 1: Visuals & Core Status (Left) */}
+                    <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8 order-2 lg:order-1">
+                        <div className="glass p-6 rounded-[2rem] border-green-500/20 bg-green-500/[0.02] relative overflow-hidden">
                             <PulseParticles intensity={intensity} />
-                            <div className="flex flex-col items-center text-center space-y-6 relative z-10">
-                                <div className="w-20 h-20 bg-green-500/10 rounded-3xl flex items-center justify-center border border-green-500/20">
-                                    <Shield className="text-green-500" size={40} />
+                            <div className="flex flex-col items-center text-center space-y-4 relative z-10">
+                                <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
+                                    <Shield className="text-green-500" size={32} />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-3xl text-white tracking-tight text-gradient">ACTIVE</h3>
-                                    <p className="text-green-500 text-[10px] font-black tracking-[0.2em] uppercase mt-1">
+                                    <h3 className="font-black text-2xl text-white tracking-tight text-gradient">ACTIVE</h3>
+                                    <p className="text-green-500 text-[8px] font-black tracking-[0.2em] uppercase mt-1">
                                         {Object.keys(toys).length} Device(s) Linked
                                     </p>
                                 </div>
@@ -595,34 +595,47 @@ export default function HostView() {
                                 <div className="flex gap-2 w-full">
                                     <button
                                         onClick={() => sendFeedback('good')}
-                                        className="flex-1 py-4 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-2xl text-green-400 transition-all active:scale-95 flex items-center justify-center"
+                                        className="flex-1 py-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-xl text-green-400 transition-all active:scale-95 flex items-center justify-center"
                                     >
-                                        <ThumbsUp size={20} />
+                                        <ThumbsUp size={18} />
                                     </button>
                                     <button
                                         onClick={() => sendFeedback('bad')}
-                                        className="flex-1 py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-2xl text-red-400 transition-all active:scale-95 flex items-center justify-center"
+                                        className="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 transition-all active:scale-95 flex items-center justify-center"
                                     >
-                                        <ThumbsDown size={20} />
+                                        <ThumbsDown size={18} />
                                     </button>
                                 </div>
+
+                                <button
+                                    onClick={() => {
+                                        socket.emit('host-climax', { uid: customName, slug });
+                                        setApiFeedback({ success: true, message: "CLIMAX ALERT SENT TO PARTNER! 🔥" });
+                                        setTimeout(() => setApiFeedback(null), 3000);
+                                    }}
+                                    className="w-full py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 rounded-2xl text-white text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-red-500/20 active:scale-95 transition-all mt-4 border border-red-400/30 kinky-glow-red"
+                                >
+                                    🔥 I'M GONNA CUM! 🔥
+                                </button>
                             </div>
                         </div>
 
                         {/* Avatar Visualization */}
-                        <div className="glass p-8 rounded-[2.5rem] flex flex-col items-center">
-                            <TypistAvatar intensity={intensity} lastAction={lastAction} />
+                        <div className="glass p-6 rounded-[2rem] flex flex-col items-center overflow-hidden">
+                            <div className="scale-75 origin-center -my-4">
+                                <TypistAvatar intensity={intensity} lastAction={lastAction} />
+                            </div>
 
-                            <div className="w-full space-y-3 mt-4">
+                            <div className="w-full space-y-2 mt-2">
                                 <div className="flex justify-between items-center px-1">
-                                    <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Live Pulse</span>
-                                    <span className={`text-[9px] font-black uppercase tracking-widest ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
+                                    <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Pulse</span>
+                                    <span className={`text-[8px] font-black uppercase tracking-widest ${intensity > 0 ? 'text-pink-400' : 'text-white/10'}`}>
                                         {intensity > 0 ? lastAction : 'idle'}
                                     </span>
                                 </div>
-                                <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5 relative">
+                                <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5 relative">
                                     <motion.div
-                                        className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full shadow-[0_0_15px_rgba(219,39,119,0.3)]"
+                                        className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 rounded-full"
                                         animate={{ width: `${intensity}%`, opacity: intensity > 0 ? 1 : 0.3 }}
                                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     />
@@ -630,26 +643,119 @@ export default function HostView() {
                             </div>
                         </div>
 
-                        <div className="glass p-6 rounded-3xl">
+                        <div className="glass p-4 rounded-3xl">
                             <SessionHeatmap events={sessionEvents} startTime={sessionStartTime} />
                         </div>
                     </div>
 
-                    {/* RIGHT COLUMN: Controls, Link & Feeds */}
-                    <div className="lg:col-span-8 space-y-6">
-                        {/* Secret Link Section */}
-                        <div className="glass p-8 rounded-[2.5rem] border-purple-500/20 bg-purple-500/[0.02]">
-                            <div className="flex flex-col md:flex-row items-center gap-6">
-                                <div className="flex-1 space-y-2 text-center md:text-left">
-                                    <h2 className="text-xl font-black text-white italic uppercase tracking-tight">Secret Link</h2>
-                                    <p className="text-[10px] text-white/40 uppercase tracking-widest">Give this link to your partner.</p>
-                                    <code className="block mt-4 text-xs font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5">
-                                        {window.location.host}/t/{slug}
-                                    </code>
+                    {/* COLUMN 2: Live Feeds (Center) */}
+                    <div className="lg:col-span-6 space-y-6 order-1 lg:order-2">
+                        {/* Live Typist Feed */}
+                        <AnimatePresence mode="wait">
+                            {typingDraft ? (
+                                <motion.div
+                                    key="draft-active"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="glass p-10 rounded-[3rem] border-purple-500/40 bg-purple-500/[0.04] shadow-2xl shadow-purple-500/10 min-h-[220px] flex flex-col justify-center relative overflow-hidden group"
+                                >
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
+
+                                    <div className="flex items-center justify-between border-b border-purple-500/10 pb-6 mb-6">
+                                        <h3 className="text-xs font-black text-purple-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                                            <Keyboard size={18} className="animate-pulse" /> Typist Thinking...
+                                        </h3>
+                                        <div className="flex gap-1.5">
+                                            <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                            <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                            <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" />
+                                        </div>
+                                    </div>
+                                    <p className="text-4xl font-medium text-white leading-tight italic tracking-tight break-words">
+                                        {typingDraft}
+                                        <motion.span
+                                            animate={{ opacity: [1, 0] }}
+                                            transition={{ duration: 0.8, repeat: Infinity }}
+                                            className="w-1.5 h-10 bg-purple-500 inline-block ml-2 align-middle"
+                                        />
+                                    </p>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="draft-empty"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="glass p-10 rounded-[3rem] border-white/5 bg-white/[0.01] min-h-[220px] flex flex-col items-center justify-center text-center space-y-4"
+                                >
+                                    <div className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-white/10">
+                                        <Keyboard size={24} />
+                                    </div>
+                                    <p className="text-white/20 font-black uppercase tracking-[0.3em] text-[10px]">
+                                        Waiting for partner to type...
+                                    </p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Recent Whispers */}
+                        <div className="glass p-8 rounded-[2.5rem] space-y-6">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                                <h3 className="text-sm font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Sparkles size={16} className="text-purple-500" /> Recent Whispers
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[8px] text-white/20 font-black uppercase tracking-widest">{messages.length} Messages</span>
+                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold uppercase">HISTORY</span>
                                 </div>
-                                <div className="flex flex-col gap-2 w-full md:w-auto min-w-[200px]">
+                            </div>
+
+                            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                {messages.length === 0 ? (
+                                    <div className="text-center py-20 text-white/5 uppercase text-[10px] font-black tracking-widest border-2 border-dashed border-white/5 rounded-3xl">
+                                        Silence is waiting to be broken...
+                                    </div>
+                                ) : (
+                                    (messages || []).map((msg) => (
+                                        <motion.div
+                                            key={msg?.id || Math.random()}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="p-6 rounded-3xl bg-white/[0.03] border border-white/5 hover:border-purple-500/20 transition-all text-left group"
+                                        >
+                                            <p className="text-xl text-white/90 font-medium leading-relaxed group-hover:text-white transition-colors">
+                                                {msg?.text || ''}
+                                            </p>
+                                            <div className="flex items-center gap-3 mt-4">
+                                                <div className="h-[1px] flex-1 bg-white/5" />
+                                                <p className="text-[10px] text-white/20 uppercase font-black tracking-widest">
+                                                    {msg?.timestamp instanceof Date
+                                                        ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                        : 'just now'}
+                                                </p>
+                                            </div>
+                                        </motion.div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* COLUMN 3: Link & Controls (Right) */}
+                    <div className="lg:col-span-3 space-y-6 order-3">
+                        {/* Secret Link Section */}
+                        <div className="glass p-6 rounded-2xl border-purple-500/20 bg-purple-500/[0.02]">
+                            <div className="space-y-4">
+                                <div className="text-center lg:text-left">
+                                    <h2 className="text-xs font-black text-white italic uppercase tracking-widest">Partner Link</h2>
+                                    <p className="text-[8px] text-white/40 uppercase tracking-[0.2em] mt-1">Share this to start</p>
+                                </div>
+                                <code className="block text-[10px] font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5 break-all text-center">
+                                    {window.location.host}/t/{slug}
+                                </code>
+                                <div className="grid grid-cols-1 gap-2">
                                     <button
-                                        className="w-full button-premium py-4 rounded-xl text-xs"
+                                        className="w-full button-premium py-3 rounded-xl text-[10px]"
                                         onClick={() => {
                                             navigator.clipboard.writeText(`${window.location.origin}/t/${slug}`);
                                             setCopied(true);
@@ -660,128 +766,62 @@ export default function HostView() {
                                     </button>
                                     <button
                                         onClick={testVibration}
-                                        className="w-full py-3 border border-purple-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
+                                        className="w-full py-2 border border-purple-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
                                     >
-                                        <Zap size={14} /> SYNC TEST
+                                        <Zap size={12} /> SYNC TEST
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Presets */}
-                            <div className="glass p-6 rounded-3xl space-y-4">
-                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest leading-none">
-                                    <Activity size={12} className="text-purple-400" /> Presets
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {['none', 'pulse', 'wave', 'chaos'].map(p => (
-                                        <button
-                                            key={p}
-                                            onClick={() => setPreset(p)}
-                                            className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${activePreset === p ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
-                                </div>
+                        {/* Interaction Presets */}
+                        <div className="glass p-5 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest leading-none">
+                                <Activity size={12} className="text-purple-400" /> Presets
                             </div>
-
-                            {/* Overrides */}
-                            <div className="glass p-6 rounded-3xl space-y-4">
-                                <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-widest leading-none">
-                                    <Sliders size={12} className="text-pink-400" /> Overrides
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Master Mute</span>
-                                        <button
-                                            onClick={() => setIsMuted(!isMuted)}
-                                            className={`p-2 rounded-lg transition-all ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white/20'}`}
-                                        >
-                                            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                                        </button>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between">
-                                            <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Base Floor</span>
-                                            <span className="text-[9px] font-mono text-purple-400">{baseIntensity}%</span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="0" max="100"
-                                            value={baseIntensity}
-                                            onChange={(e) => {
-                                                setBaseIntensity(e.target.value);
-                                                socket.emit('set-base-floor', { uid: customName, level: e.target.value });
-                                            }}
-                                            className="w-full accent-purple-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                                        />
-                                    </div>
-                                </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['none', 'pulse', 'wave', 'chaos'].map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setPreset(p)}
+                                        className={`py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${activePreset === p ? 'bg-purple-500 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
-                        {/* Feeds */}
-                        <div className="space-y-6">
-                            {/* Live Typist Feed */}
-                            <AnimatePresence>
-                                {typingDraft && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0 }}
-                                        className="glass p-8 rounded-[2.5rem] border-purple-500/30 bg-purple-500/[0.03] space-y-4"
+                        {/* Overrides */}
+                        <div className="glass p-5 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest leading-none">
+                                <Sliders size={12} className="text-pink-400" /> Overrides
+                            </div>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[8px] font-bold text-white/30 uppercase tracking-widest">Master Mute</span>
+                                    <button
+                                        onClick={() => setIsMuted(!isMuted)}
+                                        className={`p-1.5 rounded-lg transition-all ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white/20'}`}
                                     >
-                                        <div className="flex items-center justify-between border-b border-purple-500/10 pb-4">
-                                            <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                <Keyboard size={14} className="animate-pulse" /> Typist Thinking...
-                                            </h3>
-                                            <div className="flex gap-1">
-                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce" />
-                                            </div>
-                                        </div>
-                                        <p className="text-2xl font-medium text-white/90 leading-relaxed italic">
-                                            {typingDraft}
-                                            <span className="w-2 h-6 bg-purple-500 inline-block ml-1 animate-pulse" />
-                                        </p>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            {/* Recent Whispers */}
-                            <div className="glass p-8 rounded-[2.5rem] space-y-6">
-                                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                                    <h3 className="text-sm font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <Sparkles size={16} className="text-purple-500" /> Recent Whispers
-                                    </h3>
-                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold">HISTORY</span>
+                                        {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                    </button>
                                 </div>
-
-                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {messages.length === 0 ? (
-                                        <div className="text-center py-10 text-white/10 uppercase text-[10px] font-black tracking-widest">
-                                            Silence is waiting to be broken...
-                                        </div>
-                                    ) : (
-                                        (messages || []).map((msg) => (
-                                            <motion.div
-                                                key={msg?.id || Math.random()}
-                                                initial={{ opacity: 0, x: -20 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-purple-500/20 transition-all text-left"
-                                            >
-                                                <p className="text-lg text-white font-medium leading-relaxed">{msg?.text || ''}</p>
-                                                <p className="text-[10px] text-white/20 mt-2 uppercase font-bold tracking-wider">
-                                                    {msg?.timestamp instanceof Date
-                                                        ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                        : 'just now'}
-                                                </p>
-                                            </motion.div>
-                                        ))
-                                    )}
+                                <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                        <span className="text-[8px] font-bold text-white/30 uppercase tracking-widest">Base Floor</span>
+                                        <span className="text-[8px] font-mono text-purple-400">{baseIntensity}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0" max="100"
+                                        value={baseIntensity}
+                                        onChange={(e) => {
+                                            setBaseIntensity(e.target.value);
+                                            socket.emit('set-base-floor', { uid: customName, level: e.target.value });
+                                        }}
+                                        className="w-full accent-purple-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                    />
                                 </div>
                             </div>
                         </div>

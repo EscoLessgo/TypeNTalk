@@ -33,6 +33,7 @@ export default function TypistView() {
     const [intensity, setIntensity] = useState(0);
     const [hostFeedback, setHostFeedback] = useState(null);
     const [activePreset, setActivePreset] = useState('none');
+    const [isClimaxRequested, setIsClimaxRequested] = useState(false);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -65,12 +66,18 @@ export default function TypistView() {
             setActivePreset(data.preset);
         });
 
+        socket.on('climax-requested', () => {
+            console.log('[SOCKET] Host is reaching climax!');
+            setIsClimaxRequested(true);
+        });
+
         return () => {
             socket.off('connect');
             socket.off('disconnect');
             socket.off('approval-status');
             socket.off('host-feedback');
             socket.off('preset-update');
+            socket.off('climax-requested');
             stopMic();
         };
     }, [slug]);
@@ -363,6 +370,89 @@ export default function TypistView() {
                     <span className="text-gradient">TNT</span> SYNC
                 </h1>
             </div>
+
+            <AnimatePresence>
+                {isClimaxRequested && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed inset-x-4 bottom-28 z-50 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[500px]"
+                    >
+                        <div className="glass-premium p-8 rounded-[2.5rem] border-red-500/50 bg-red-500/10 shadow-[0_0_50px_rgba(239,68,68,0.3)] text-center space-y-6 kinky-glow-red animate-pulse">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="p-4 bg-red-500/20 rounded-full text-red-500">
+                                    <Zap size={40} className="animate-bounce" />
+                                </div>
+                                <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
+                                    {hostName.toUpperCase()} IS REACHING CLIMAX!
+                                </h2>
+                                <p className="text-red-400 font-bold uppercase tracking-widest text-[10px]">
+                                    THEY ARE BEGGING FOR IT. FINISH THEM.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <button
+                                    onClick={() => {
+                                        const pattern = [{ intensity: 20, duration: 10 }];
+                                        socket.emit('trigger-climax', { slug, pattern });
+                                        setIsClimaxRequested(false);
+                                        setIntensity(100);
+                                        setTimeout(() => setIntensity(0), 10000);
+                                    }}
+                                    className="w-full py-6 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white rounded-2xl text-xl font-black uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 group overflow-hidden relative"
+                                >
+                                    🔥 CONSTANT SURGE (10s)
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        const pattern = [];
+                                        for (let i = 0; i < 10; i++) {
+                                            pattern.push({ intensity: 20, duration: 0.5 });
+                                            pattern.push({ intensity: 0, duration: 0.5 });
+                                        }
+                                        socket.emit('trigger-climax', { slug, pattern });
+                                        setIsClimaxRequested(false);
+                                        setIntensity(100);
+                                        setTimeout(() => setIntensity(0), 10000);
+                                    }}
+                                    className="w-full py-4 bg-white/5 border border-red-500/30 hover:bg-red-500/10 text-red-500 rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                                >
+                                    ⚡ RAPID STACCATO
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        // Ramping pattern: increases frequency and intensity
+                                        const pattern = [];
+                                        for (let i = 1; i <= 10; i++) {
+                                            pattern.push({ intensity: Math.floor(i * 2), duration: 1 - (i * 0.05) });
+                                        }
+                                        pattern.push({ intensity: 20, duration: 5 });
+                                        socket.emit('trigger-climax', { slug, pattern });
+                                        setIsClimaxRequested(false);
+                                        setIntensity(100);
+                                        setTimeout(() => setIntensity(0), 10000);
+                                    }}
+                                    className="w-full py-4 bg-white/5 border border-purple-500/30 hover:bg-purple-500/10 text-purple-400 rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                                >
+                                    🌊 RAMPING OVERDRIVE
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setIsClimaxRequested(false)}
+                                className="text-white/20 hover:text-white/40 text-[10px] uppercase font-black tracking-widest transition-colors pt-4"
+                            >
+                                Not yet... keep teasing
+                            </button>
+
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative border-purple-500/20 shadow-lg shadow-purple-500/5">
                 {/* Status Indicator */}

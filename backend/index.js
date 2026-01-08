@@ -431,6 +431,41 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('host-climax', ({ uid, slug }) => {
+        console.log(`[CLIMAX] Host ${uid} reached climax, alerting slug ${slug}`);
+        io.to(`typist:${slug}`).emit('climax-requested');
+    });
+
+    socket.on('trigger-climax', async ({ slug, pattern }) => {
+        const conn = await prisma.connection.findUnique({
+            where: { slug },
+            include: { host: true }
+        });
+
+        if (conn && conn.approved) {
+            console.log(`[CLIMAX] Triggering climax for ${conn.host.uid}`);
+
+            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'climax', level: 20 });
+            io.to(`host:${conn.host.uid}`).emit('api-feedback', {
+                success: true,
+                message: "🔥 CLIMAX TRIGGERED! 100% POWER ENGAGED! 🔥"
+            });
+
+            if (pattern && Array.isArray(pattern)) {
+                // Run the custom pattern
+                for (const step of pattern) {
+                    sendCommand(conn.host.uid, 'vibrate', step.intensity, step.duration);
+                    if (step.duration > 0) {
+                        await new Promise(r => setTimeout(r, step.duration * 1000));
+                    }
+                }
+            } else {
+                // Default intense climax pattern: 10 seconds of 100% intensity
+                sendCommand(conn.host.uid, 'vibrate', 20, 10);
+            }
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         // Clean up presets if host disconnects?
