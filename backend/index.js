@@ -83,6 +83,8 @@ app.get('/health', async (req, res) => {
 const qrCache = new Map();
 const presets = new Map(); // uid -> interval
 const baseFloors = new Map(); // uid -> level
+const commandQueues = new Map(); // uid -> { timeout, pendingStrength, lastSent }
+const preferredUrls = new Map(); // uid -> string (the successful URL)
 
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
@@ -507,11 +509,49 @@ io.on('connection', (socket) => {
 
 async function sendCommand(uid, command, strength, duration, directSocket = null) {
     if (!process.env.LOVENSE_DEVELOPER_TOKEN) {
-        const err = 'LOVENSE_DEVELOPER_TOKEN is missing in Railway variables!';
-        console.error(`[CRITICAL] ${err}`);
+        const err = 'LOVENSE_DEVELOPER_TOKEN is missing!';
         if (directSocket) directSocket.emit('api-feedback', { success: false, message: err });
         return;
     }
+
+    const floor = baseFloors.get(uid) || 0;
+    const finalStrength = Math.max(strength, Math.floor(floor / 5));
+
+    // --- THROTTLING LOGIC ---
+    // Lovense Cloud API is heavily rate-limited (1-2 req/sec). 
+    // We must buffer keypresses to prevent IP blacklisting.
+    const now = Date.now();
+    let queue = commandQueues.get(uid);
+
+    if (!queue) {
+        queue = { timeout: null, pendingStrength: 0, lastSent: 0 };
+        commandQueues.set(uid, queue);
+    }
+
+    // If we've sent a command very recently (< 400ms), buffer this one
+    const cooldown = 400;
+    if (now - queue.lastSent < cooldown) {
+        // Only keep the strongest pulse during the wait window
+        queue.pendingStrength = Math.max(queue.pendingStrength, finalStrength);
+
+        if (!queue.timeout) {
+            queue.timeout = setTimeout(async () => {
+                const s = queue.pendingStrength;
+                queue.timeout = null;
+                queue.pendingStrength = 0;
+                await performDispatch(uid, s, duration, directSocket);
+            }, cooldown - (now - queue.lastSent));
+        }
+        return;
+    }
+
+    // Immediate send if outside cooldown
+    await performDispatch(uid, finalStrength, duration, directSocket);
+}
+
+async function performDispatch(uid, strength, duration, directSocket) {
+    const queue = commandQueues.get(uid);
+    if (queue) queue.lastSent = Date.now();
 
     try {
         let host;
@@ -521,12 +561,8 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
             host = memoryStore.hosts.get(uid);
         }
 
-        const floor = baseFloors.get(uid) || 0;
-        const finalStrength = Math.max(strength, Math.floor(floor / 5)); // Strength is 0-20, floor is 0-100
-
         if (!host || !host.toys) {
-            console.log(`[LOVENSE] No toy metadata for ${uid}, sending broadcast command.`);
-            return await dispatchRaw(uid, null, 'vibrate', finalStrength, duration, directSocket);
+            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
         }
 
         const toyList = JSON.parse(host.toys);
@@ -536,33 +572,33 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
         for (const toy of toys) {
             const tId = toy.id || toy.toyId;
             if (tId === 'SIM' && toys.length > 1) continue;
-            const targetToyId = tId === 'SIM' ? null : tId;
-
-            // Simplified: Only send Vibrate. Shotgunning 4 commands per keypress causes instant rate-limiting.
-            commands.push(dispatchRaw(uid, targetToyId, 'Vibrate', finalStrength, duration, directSocket));
+            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'Vibrate', strength, duration, directSocket));
         }
 
         await Promise.all(commands);
-        if (directSocket) directSocket.emit('incoming-pulse', { source: 'test', level: strength });
+        if (directSocket && strength > 0) directSocket.emit('incoming-pulse', { source: 'test', level: strength });
     } catch (error) {
-        console.error('[LOVENSE] Error in command mapping:', error.message);
+        console.error('[LOVENSE] Dispatch Error:', error.message);
     }
 }
 
 async function dispatchRaw(uid, toyId, command, strength, duration, directSocket = null) {
-    // Automatically trim whitespace from the token to prevent Railway paste errors
-    const rawToken = process.env.LOVENSE_DEVELOPER_TOKEN || '';
-    const token = rawToken.trim();
+    const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
 
-    if (token) {
-        console.log(`[DEBUG] Token Loaded: ${token.substring(0, 4)}...${token.substring(token.length - 4)}`);
-    }
+    // Use preferred URL if we found one that works for this user
+    const savedUrl = preferredUrls.get(uid);
 
     const apiUrls = [
         'https://api.lovense-api.com/api/lan/v2/command',
-        'https://api.lovense.com/api/lan/v2/command',
         'https://api.lovense.com/api/standard/v1/command'
     ];
+
+    // Reorder to try the successfull one first
+    if (savedUrl) {
+        const idx = apiUrls.indexOf(savedUrl);
+        if (idx > -1) apiUrls.splice(idx, 1);
+        apiUrls.unshift(savedUrl);
+    }
 
     for (const url of apiUrls) {
         try {
@@ -573,8 +609,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 token: token,
                 uid: uid,
                 apiVer: 1,
-                sec: duration,      // For V1 Standard API
-                timeSec: duration   // For V2 LAN API
+                sec: duration,
+                timeSec: duration
             };
 
             if (isV2) {
@@ -587,15 +623,14 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
 
             if (toyId) payload.toyId = toyId;
 
-            console.log(`[LOVENSE] Dispatching via ${domain} (${isV2 ? 'V2' : 'V1'}) | Action: ${payload.action || payload.command}`);
-            const response = await axios.post(url, payload, { timeout: 2500 });
+            const response = await axios.post(url, payload, { timeout: 3500 });
+            const isSuccess = response.data.result === true || response.data.result === 1 || response.data.result === 'success' || response.data.message === 'success';
 
-            // CRITICAL SUCCESS CHECK: Must have result=true/1/'success'. 
-            // Lovense server often returns code:200 even if the toy is offline!
-            const isSuccess = response.data.result === true ||
-                response.data.result === 1 ||
-                response.data.result === 'success' ||
-                response.data.message === 'success';
+            // If success, store this as preferred for next time
+            if (isSuccess && url !== savedUrl) {
+                console.log(`[LOVENSE] URL Optimized: Using ${domain} for ${uid}`);
+                preferredUrls.set(uid, url);
+            }
 
             const feedback = {
                 success: isSuccess,
