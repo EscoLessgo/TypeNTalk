@@ -157,8 +157,17 @@ export default function HostView() {
             socket.off('typing-draft');
             socket.off('api-feedback');
             socket.off('overdrive-status');
+            socket.off('partner-joined');
         };
     }, []);
+
+    const [partnerPresent, setPartnerPresent] = useState(false);
+    useEffect(() => {
+        socket.on('partner-joined', () => {
+            console.log('[SOCKET] Partner joined session');
+            setPartnerPresent(true);
+        });
+    }, [isSocketConnected]);
 
     useEffect(() => {
         if (!isSocketConnected) return;
@@ -704,10 +713,18 @@ export default function HostView() {
                             </p>
                         </div>
 
-                        <div className="w-full pt-6 border-t border-white/5">
+                        <div className="w-full pt-6 border-t border-white/5 relative z-50">
+                            {partnerPresent && (
+                                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-center animate-pulse">
+                                    <span className="text-[10px] text-green-400 font-extrabold uppercase tracking-widest">Partner is waiting for control!</span>
+                                </div>
+                            )}
                             <button
-                                onClick={() => setStatus('connected')}
-                                className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20"
+                                onClick={() => {
+                                    console.log('[HOST] Transitioning to connected dashboard');
+                                    setStatus('connected');
+                                }}
+                                className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 hover:scale-[1.02] active:scale-95 transition-all"
                             >
                                 OPEN DASHBOARD <ArrowRight size={24} />
                             </button>
