@@ -467,6 +467,37 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('toggle-overdrive', async ({ slug, active }) => {
+        const conn = await prisma.connection.findUnique({
+            where: { slug },
+            include: { host: true }
+        });
+
+        if (conn && conn.approved) {
+            const uid = conn.host.uid;
+            console.log(`[OVERDRIVE] Overdrive ${active ? 'ENGAGED' : 'DISENGAGED'} for ${uid}`);
+
+            if (presets.has(uid)) {
+                clearInterval(presets.get(uid));
+                presets.delete(uid);
+            }
+
+            if (active) {
+                sendCommand(uid, 'vibrate', 20, 2);
+                const interval = setInterval(() => {
+                    sendCommand(uid, 'vibrate', 20, 2);
+                    io.to(`host:${uid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
+                }, 1500);
+                presets.set(uid, interval);
+                io.to(`host:${uid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
+            } else {
+                sendCommand(uid, 'vibrate', 0, 1);
+                io.to(`host:${uid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
+            }
+            io.to(`host:${uid}`).emit('overdrive-status', { active });
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         // Clean up presets if host disconnects?

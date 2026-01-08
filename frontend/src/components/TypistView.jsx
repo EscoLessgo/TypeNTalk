@@ -34,6 +34,7 @@ export default function TypistView() {
     const [hostFeedback, setHostFeedback] = useState(null);
     const [activePreset, setActivePreset] = useState('none');
     const [isClimaxRequested, setIsClimaxRequested] = useState(false);
+    const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
 
@@ -71,6 +72,11 @@ export default function TypistView() {
         socket.on('climax-requested', () => {
             console.log('[SOCKET] Host is reaching climax!');
             setIsClimaxRequested(true);
+        });
+
+        socket.on('overdrive-status', (data = {}) => {
+            setIsOverdrive(data.active);
+            if (data.active) setIsClimaxRequested(false); // Hide the prompt if they engaged overdrive
         });
 
         return () => {
@@ -439,8 +445,8 @@ export default function TypistView() {
                                 <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
                                     {hostName.toUpperCase()} IS REACHING CLIMAX!
                                 </h2>
-                                <p className="text-red-400 font-bold uppercase tracking-widest text-[10px]">
-                                    THEY ARE BEGGING FOR IT. FINISH THEM.
+                                <p className="text-red-400 font-bold uppercase tracking-widest text-sm animate-pulse">
+                                    🔥🔥 FINISH THEM NOW 🔥🔥
                                 </p>
                             </div>
 
@@ -560,15 +566,15 @@ export default function TypistView() {
                 </div>
             </div>
 
-            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-500 ${micLevel > 5 || intensity > 30 ? 'border-pink-500/40 bg-pink-500/[0.03]' : 'border-white/10'}`}>
+            <div className={`glass p-8 rounded-[2.5rem] relative overflow-hidden min-h-[400px] flex flex-col transition-all duration-500 ${isOverdrive ? 'border-red-600 bg-red-600/10 shadow-[0_0_50px_rgba(220,38,38,0.2)]' : (micLevel > 5 || intensity > 30 ? 'border-pink-500/40 bg-pink-500/[0.03]' : 'border-white/10')}`}>
                 {/* Dynamic Background Glow */}
-                <PulseParticles intensity={intensity || micLevel * 5} />
+                <PulseParticles intensity={isOverdrive ? 100 : (intensity || micLevel * 5)} />
 
                 <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10"
+                    className={`absolute inset-0 bg-gradient-to-br ${isOverdrive ? 'from-red-600/20 to-pink-600/20' : 'from-purple-500/10 to-pink-500/10'}`}
                     animate={{
-                        opacity: (micLevel > 0 || intensity > 0) ? 0.4 : 0.1,
-                        scale: (micLevel > 5 || intensity > 50) ? 1.05 : 1
+                        opacity: (isOverdrive || micLevel > 0 || intensity > 0) ? 0.4 : 0.1,
+                        scale: (isOverdrive || micLevel > 5 || intensity > 50) ? 1.05 : 1
                     }}
                 />
 
@@ -596,7 +602,12 @@ export default function TypistView() {
                                     <Keyboard size={12} className={intensity > 0 ? 'text-purple-400' : 'text-white/10'} />
                                     PULSE: {intensity > 0 ? 'ACTIVE' : 'IDLE'}
                                 </span>
-                                {activePreset !== 'none' && (
+                                {isOverdrive && (
+                                    <span className="flex items-center gap-2 text-red-500 animate-pulse font-black">
+                                        <Zap size={12} className="fill-current" /> CONSTANT OVERDRIVE 100%
+                                    </span>
+                                )}
+                                {activePreset !== 'none' && !isOverdrive && (
                                     <span className="flex items-center gap-2 text-pink-500 animate-pulse">
                                         <Activity size={12} /> PRESET: {activePreset.toUpperCase()}
                                     </span>
@@ -604,6 +615,16 @@ export default function TypistView() {
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => {
+                                    const newState = !isOverdrive;
+                                    socket.emit('toggle-overdrive', { slug, active: newState });
+                                    setIsOverdrive(newState);
+                                }}
+                                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-2 ${isOverdrive ? 'bg-red-600 border-red-400 text-white animate-pulse kinky-glow-red' : 'bg-red-600/5 border-red-500/20 text-red-500 hover:bg-red-600/10'}`}
+                            >
+                                <Zap size={14} className={isOverdrive ? 'fill-current' : ''} /> {isOverdrive ? 'ENGAGED' : 'OVERDRIVE'}
+                            </button>
                             <button
                                 onClick={() => setShowGuide(true)}
                                 className="p-3 text-white/20 hover:text-white transition-colors"
