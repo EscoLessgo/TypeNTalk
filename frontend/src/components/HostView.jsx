@@ -57,6 +57,11 @@ export default function HostView() {
         socket.on('connect', () => {
             console.log('[SOCKET] Connected');
             setIsSocketConnected(true);
+            const id = customNameRef.current.trim().toLowerCase();
+            if (id) {
+                console.log(`[SOCKET] Re-joining host room: ${id}`);
+                socket.emit('join-host', id);
+            }
         });
         socket.on('disconnect', () => {
             console.log('[SOCKET] Disconnected');

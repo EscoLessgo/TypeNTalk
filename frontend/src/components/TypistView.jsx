@@ -46,14 +46,20 @@ export default function TypistView() {
     const lastPulseRef = useRef(0);
 
     useEffect(() => {
-        const onConnect = () => setIsSocketConnected(true);
+        const onConnect = () => {
+            console.log('[SOCKET] Connected');
+            setIsSocketConnected(true);
+            if (slug) {
+                console.log(`[SOCKET] Re-joining typist room: ${slug}`);
+                socket.emit('join-typist', slug);
+            }
+        };
         const onDisconnect = () => setIsSocketConnected(false);
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         if (socket.connected) onConnect();
 
         checkSlug();
-        socket.emit('join-typist', slug);
 
         socket.on('approval-status', (data = {}) => {
             const { approved } = data;

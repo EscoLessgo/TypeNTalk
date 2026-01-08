@@ -420,21 +420,23 @@ io.on('connection', (socket) => {
     });
 
     socket.on('test-toy', async ({ uid }) => {
-        console.log(`[TEST-TOY] Direct test requested for UID: ${uid}`);
+        const targetUid = uid || socket.uid;
+        console.log(`[TEST-TOY] Direct test requested for UID: ${targetUid}`);
         socket.emit('api-feedback', {
             success: true,
-            message: `SERVER RECEIVED CLICK FOR ${uid}. CONNECTING TO LOVENSE...`,
+            message: `SERVER RECEIVED CLICK FOR ${targetUid}. CONNECTING TO LOVENSE...`,
             url: 'local'
         });
-        sendCommand(uid, 'Vibrate', 20, 6, socket);
+        sendCommand(targetUid, 'Vibrate', 20, 6, socket);
     });
 
     socket.on('run-diagnostics', async ({ uid }) => {
-        const host = await prisma.host.findUnique({ where: { uid } });
+        const targetUid = uid || socket.uid;
+        const host = await getHost(targetUid);
         if (!host || !host.toys) {
             socket.emit('api-feedback', { success: false, message: 'DIAGNOSTICS: No toys linked to this ID yet. Scan the QR again!' });
         } else {
-            const toys = JSON.parse(host.toys);
+            const toys = host.toys;
             const toyNames = Array.isArray(toys) ? toys.map(t => t.name).join(', ') : Object.values(toys).map(t => t.name).join(', ');
             socket.emit('api-feedback', { success: true, message: `DIAGNOSTICS: Server sees [${toyNames}]. Link is healthy.` });
         }
@@ -442,28 +444,22 @@ io.on('connection', (socket) => {
 
     // Real-time pulse from typing
     socket.on('typing-pulse', async ({ slug, intensity }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        const conn = await getConnection(slug);
 
-        if (conn && conn.approved) {
+        if (conn && conn.host && conn.approved) {
             console.log(`[PULSE] Typing pulse for ${slug} -> targeting host ${conn.host.uid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
-            console.log(`[PULSE] Ignored typing pulse. Conn found: ${!!conn}, Approved: ${conn?.approved}`);
+            if (intensity > 5) console.log(`[PULSE] Ignored typing pulse. Conn: ${!!conn}, Approved: ${conn?.approved}`);
         }
     });
 
     // Voice level pulse
     socket.on('voice-pulse', async ({ slug, intensity }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        const conn = await getConnection(slug);
 
-        if (conn && conn.approved) {
+        if (conn && conn.host && conn.approved) {
             console.log(`[PULSE] Voice pulse (${intensity}) from ${slug} -> host ${conn.host.uid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
@@ -472,12 +468,9 @@ io.on('connection', (socket) => {
 
     // Final surge
     socket.on('final-surge', async ({ slug, text, pulses }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        const conn = await getConnection(slug);
 
-        if (conn && conn.approved) {
+        if (conn && conn.host && conn.approved) {
             const surgeIntensity = 20; // 100% power
             const duration = 3; // Fixed 3 seconds
 
@@ -498,17 +491,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('host-climax', ({ uid, slug }) => {
-        console.log(`[CLIMAX] Host ${uid} reached climax, alerting slug ${slug}`);
+        console.log(`[CLIMAX] Host ${uid} reach climax, alerting slug ${slug}`);
         io.to(`typist:${slug}`).emit('climax-requested');
     });
 
     socket.on('trigger-climax', async ({ slug, pattern }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        const conn = await getConnection(slug);
 
-        if (conn && conn.approved) {
+        if (conn && conn.host && conn.approved) {
             console.log(`[CLIMAX] Triggering climax for ${conn.host.uid}`);
 
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'climax', level: 20 });
@@ -533,12 +523,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('toggle-overdrive', async ({ slug, active }) => {
-        const conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        const conn = await getConnection(slug);
 
-        if (conn && conn.approved) {
+        if (conn && conn.host && conn.approved) {
             const uid = conn.host.uid;
             console.log(`[OVERDRIVE] Overdrive ${active ? 'ENGAGED' : 'DISENGAGED'} for ${uid}`);
 
