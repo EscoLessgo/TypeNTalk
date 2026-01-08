@@ -336,10 +336,12 @@ io.on('connection', (socket) => {
 
         const conn = await getConnection(slug);
         if (conn && conn.host) {
-            console.log(`[SOCKET] Forwarding request to host: ${conn.host.uid}`);
-            io.to(`host:${conn.host.uid}`).emit('approval-request', { slug, name: displayName });
+            const room = `host:${conn.host.uid}`;
+            const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+            console.log(`[SOCKET] Forwarding request to host room: ${room} (Size: ${roomSize})`);
+            io.to(room).emit('approval-request', { slug, name: displayName });
         } else {
-            console.warn(`[SOCKET] Failed to find host for slug ${slug} during approval request`);
+            console.warn(`[SOCKET] Failed to find host for slug ${slug} during approval request (Conn found: ${!!conn})`);
         }
     });
 
@@ -361,8 +363,16 @@ io.on('connection', (socket) => {
 
     socket.on('host-feedback', (data = {}) => {
         const { uid, type, slug } = data;
-        console.log(`[SOCKET] Host ${uid} Signal: "${type}" -> Typist ${slug}`);
-        io.to(`typist:${slug}`).emit('host-feedback', { type });
+        const room = `typist:${slug}`;
+        const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+
+        console.log(`[SIGNAL] Host ${uid} -> Typist ${slug} (Room Size: ${roomSize}) | Type: ${type}`);
+
+        if (roomSize === 0) {
+            console.warn(`[SIGNAL] Warning: Room ${room} is EMPTY. Typist might have disconnected or is in a different room.`);
+        }
+
+        io.to(room).emit('host-feedback', { type });
     });
 
     socket.on('set-base-floor', ({ uid, level }) => {
@@ -447,11 +457,16 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
 
         if (conn && conn.host && conn.approved) {
-            console.log(`[PULSE] Typing pulse for ${slug} -> targeting host ${conn.host.uid}`);
+            const room = `host:${conn.host.uid}`;
+            const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+            console.log(`[PULSE] Typing for ${slug} -> Host ${conn.host.uid} (Room Size: ${roomSize})`);
+
             sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
+            io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
-            if (intensity > 5) console.log(`[PULSE] Ignored typing pulse. Conn: ${!!conn}, Approved: ${conn?.approved}`);
+            if (intensity > 5) {
+                console.log(`[PULSE] Ignored typing pulse. Conn exists: ${!!conn}, Host exists: ${!!conn?.host}, Approved: ${conn?.approved}`);
+            }
         }
     });
 

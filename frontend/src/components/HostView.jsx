@@ -21,7 +21,7 @@ export default function HostView() {
     const [status, setStatus] = useState('setup'); // setup, qr, connected
     const [qrCode, setQrCode] = useState('');
     const [pairingCode, setPairingCode] = useState('');
-    const [customName, setCustomName] = useState('');
+    const [customName, setCustomName] = useState(localStorage.getItem('host_custom_name') || '');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
     const [slug, setSlug] = useState('');
@@ -51,6 +51,9 @@ export default function HostView() {
     const customNameRef = useRef(customName);
     useEffect(() => {
         customNameRef.current = customName;
+        if (customName) {
+            localStorage.setItem('host_custom_name', customName);
+        }
     }, [customName]);
 
     useEffect(() => {
