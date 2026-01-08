@@ -249,8 +249,14 @@ export default function HostView() {
     };
 
     const resetSession = () => {
+        const currentUid = localStorage.getItem('lovense_uid');
+        if (currentUid) {
+            // Tell server to clear cache for this ID too
+            socket.emit('clear-qr-cache', { username: currentUid });
+        }
         localStorage.removeItem('lovense_uid');
-        window.location.reload();
+        localStorage.removeItem('host_custom_name'); // Clear name too for a fresh start
+        window.location.assign(window.location.pathname); // Force fresh reload
     };
 
     const copyPairingCode = () => {
@@ -307,8 +313,16 @@ export default function HostView() {
     };
 
     const sendFeedback = (type) => {
-        console.log(`[HOST] Sending feedback: ${type}`);
-        socket.emit('host-feedback', { uid: customName, type, slug });
+        const targetSlug = slug || slugRef.current;
+        console.log(`[HOST] Sending feedback: ${type} to slug: ${targetSlug}`);
+
+        if (!targetSlug) {
+            console.error('[HOST] Cannot send feedback: No slug available.');
+            setApiFeedback({ success: false, message: 'SIGNAL ERROR: No active connection link found.' });
+            return;
+        }
+
+        socket.emit('host-feedback', { uid: customName, type, slug: targetSlug });
         // Visual feedback locally
         setApiFeedback({ success: true, message: `Feedback Sent: ${type.toUpperCase()}` });
         setTimeout(() => setApiFeedback(null), 3000);

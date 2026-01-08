@@ -120,6 +120,45 @@ const baseFloors = new Map(); // uid -> level
 const commandQueues = new Map(); // uid -> { timeout, pendingStrength, lastSent }
 const preferredUrls = new Map(); // uid -> string (the successful URL)
 
+// GLOBAL RATE LIMITER (To prevent IP-wide 50500 blocks)
+let lastGlobalRequestTime = 0;
+const GLOBAL_COOLDOWN = 400; // tuned to 2.5 req/sec
+let globalRequestQueue = [];
+let isProcessingGlobalQueue = false;
+
+async function processGlobalQueue() {
+    if (isProcessingGlobalQueue || globalRequestQueue.length === 0) return;
+    isProcessingGlobalQueue = true;
+
+    while (globalRequestQueue.length > 0) {
+        const now = Date.now();
+        const timeSinceLast = now - lastGlobalRequestTime;
+
+        if (timeSinceLast < GLOBAL_COOLDOWN) {
+            await new Promise(r => setTimeout(r, GLOBAL_COOLDOWN - timeSinceLast));
+        }
+
+        const { task, resolve, reject } = globalRequestQueue.shift();
+        lastGlobalRequestTime = Date.now();
+
+        try {
+            const result = await task();
+            resolve(result);
+        } catch (e) {
+            reject(e);
+        }
+    }
+
+    isProcessingGlobalQueue = false;
+}
+
+function enqueueGlobalRequest(task) {
+    return new Promise((resolve, reject) => {
+        globalRequestQueue.push({ task, resolve, reject });
+        processGlobalQueue();
+    });
+}
+
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
     const { username } = req.query;
@@ -145,15 +184,16 @@ app.get('/api/lovense/qr', async (req, res) => {
 
         for (const domain of domains) {
             try {
-                console.log(`[LOVENSE] Attempting QR generation via ${domain}...`);
-                const response = await axios.post(`${domain}/api/lan/getQrCode`, {
+                console.log(`[LOVENSE] Attempting QR generation via ${domain} (Global Queue: ${globalRequestQueue.length})...`);
+
+                const response = await enqueueGlobalRequest(() => axios.post(`${domain}/api/lan/getQrCode`, {
                     token: token,
                     uid: username,
                     uname: username,
                     v: 2,
                     apiVer: 1,
                     type: 'standard'
-                }, { timeout: 8000 });
+                }, { timeout: 8000 }));
 
                 if (response.data && (response.data.result === true || response.data.result === 1)) {
                     qrCache.set(username, { data: response.data.data, time: Date.now() });
@@ -260,7 +300,18 @@ app.post('/api/connections/create', async (req, res) => {
         }
 
         if (existingSlug) {
-            console.log(`[SESSION] Reusing existing slug ${existingSlug} for host ${uid}`);
+            console.log(`[SESSION] Reusing existing slug ${existingSlug} for host ${uid} | Resetting Approval: REQUIRED`);
+            try {
+                await prisma.connection.update({
+                    where: { slug: existingSlug },
+                    data: { approved: false }
+                });
+            } catch (e) {
+                const memConn = memoryStore.connections.get(existingSlug);
+                if (memConn) memConn.approved = false; // Ensure memory store is updated synchronously
+            }
+            // Explicitly notify any connected sockets that approval is now required
+            io.to(`typist:${existingSlug}`).emit('approval-status', { approved: false });
             return res.json({ slug: existingSlug });
         }
 
@@ -311,6 +362,13 @@ app.post('/api/history/favorite', async (req, res) => {
 // Socket.io Logic
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+
+    socket.on('clear-qr-cache', ({ username }) => {
+        if (username) {
+            console.log(`[LOVENSE] Clearing QR cache for ${username}`);
+            qrCache.delete(username);
+        }
+    });
 
     socket.on('join-host', (uid) => {
         socket.uid = uid;
@@ -688,7 +746,7 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
 
             if (toyId) payload.toyId = toyId;
 
-            const response = await axios.post(url, payload, { timeout: 3500 });
+            const response = await enqueueGlobalRequest(() => axios.post(url, payload, { timeout: 3500 }));
             const isIpBlock = response.data.code === 50500;
             const isSuccess = response.data.result === true || response.data.result === 1 || response.data.result === 'success' || response.data.message === 'success';
 
