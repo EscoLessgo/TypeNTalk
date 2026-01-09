@@ -742,8 +742,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
     const savedUrl = preferredUrls.get(uid);
 
     const apiUrls = [
-        'https://api.lovense-api.com/api/lan/v2/command',
-        'https://api.lovense.com/api/standard/v1/command'
+        'https://api.lovense.com/api/standard/v1/command',
+        'https://api.lovense-api.com/api/standard/v1/command'
     ];
 
     // Reorder to try the successfull one first
@@ -756,8 +756,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
     for (const url of apiUrls) {
         try {
             const domain = url.split('/')[2];
-            const isV2 = url.includes('/v2/');
 
+            // Standard V1 API Payload
             const payload = {
                 token: token,
                 uid: uid,
@@ -766,17 +766,9 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 timeSec: duration
             };
 
-            if (isV2) {
-                payload.command = "Function";
-                // V2 uses "Vibrate:20", "Rotate:10", etc. Capitalized action usually safe.
-                const actionCmd = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
-                payload.action = `${actionCmd}:${Math.min(Math.max(strength, 0), 20)}`;
-            } else {
-                // Standard V1 API: command should be "Vibrate", "Rotate", etc.
-                // We force capitalization 
-                payload.command = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
-                payload.strength = Math.min(Math.max(strength, 0), 20);
-            }
+            // Force capitalization for Standard API (e.g. "Vibrate")
+            payload.command = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
+            payload.strength = Math.min(Math.max(strength, 0), 20);
 
             if (toyId) payload.toyId = toyId;
 
