@@ -388,6 +388,11 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
         if (conn) {
             socket.emit('approval-status', { approved: conn.approved });
+            // Notify host that partner is here
+            if (conn.host) {
+                console.log(`[SOCKET] Alerting Host ${conn.host.uid} that partner joined`);
+                io.to(`host:${conn.host.uid}`).emit('partner-joined', { slug });
+            }
         }
     });
 
@@ -486,12 +491,9 @@ io.on('connection', (socket) => {
         // We'd need a lookup for slug, but for now we'll just broadcast or rely on client state
         // In a real app we'd find the connection
 
-        if (preset === 'none') {
-            io.emit('preset-update', { uid, preset: 'none' }); // Simplified broadcast
-            return;
-        }
-
         io.emit('preset-update', { uid, preset });
+
+        if (preset === 'none') return;
 
         const interval = setInterval(() => {
             let strength = 0;
@@ -592,14 +594,28 @@ io.on('connection', (socket) => {
             });
 
             io.to(`host:${conn.host.uid}`).emit('new-message', { text });
-        } else {
-            console.warn(`[BLOCK] Illegal Surge from ${slug}. Approved: ${isApproved}`);
         }
     });
 
     socket.on('host-climax', ({ uid, slug }) => {
-        console.log(`[CLIMAX] Host ${uid} reach climax, alerting slug ${slug}`);
-        io.to(`typist:${slug}`).emit('climax-requested');
+        const room = `typist:${slug}`;
+        const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+        console.log(`[CLIMAX] Host ${uid} reach climax, alerting slug ${slug} (Room Size: ${roomSize})`);
+
+        if (roomSize === 0) {
+            console.warn(`[CLIMAX] Warning: Room ${room} is EMPTY. Climax alert dropped.`);
+            socket.emit('api-feedback', {
+                success: false,
+                message: "SIGNAL NOT DELIVERED: Partner is offline."
+            });
+            return;
+        }
+
+        io.to(room).emit('climax-requested');
+        socket.emit('api-feedback', {
+            success: true,
+            message: "CLIMAX ALERT DELIVERED! 🔥"
+        });
     });
 
     socket.on('trigger-climax', async ({ slug, pattern }) => {
