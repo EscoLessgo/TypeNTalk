@@ -422,14 +422,25 @@ io.on('connection', (socket) => {
             });
             console.log(`[DB] Approval updated for ${slug}`);
         } catch (e) {
+            console.error(`[DB-ERROR] Failed to update approval for ${slug}: ${e.message}`);
             const memConn = memoryStore.connections.get(slug);
             if (memConn) {
                 memConn.approved = approved;
                 console.log(`[MEMORY] Approval updated for ${slug}`);
+            } else {
+                console.warn(`[WARNING] No memory connection found for ${slug} to update approval.`);
             }
         }
 
-        io.to(`typist:${slug}`).emit('approval-status', { approved });
+        const room = `typist:${slug}`;
+        const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+        console.log(`[APPROVAL-EMIT] Sending approval-status to ${room} (Size: ${roomSize})`);
+
+        if (roomSize === 0) {
+            console.warn(`[WARNING] Typist room ${room} is empty! Typist might have disconnected or hasn't joined yet.`);
+        }
+
+        io.to(room).emit('approval-status', { approved });
     });
 
     socket.on('host-feedback', (data = {}) => {

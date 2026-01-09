@@ -77,7 +77,16 @@ export default function HostView() {
             const { toys } = data;
             if (!toys) return;
             setToys(toys);
-            setStatus('verified'); // Move to verification step
+
+            setStatus(prev => {
+                // Prevent booting the user back to verification if they are already in the dashboard
+                if (prev === 'connected') {
+                    console.log('[SOCKET] lovense:linked received but user is already connected. Ignoring state reset.');
+                    return prev;
+                }
+                return 'verified';
+            });
+
             // Link is already created/reset in startSession, but we refresh it here to be safe
             createLink(customNameRef.current.trim().toLowerCase());
         });
@@ -323,7 +332,9 @@ export default function HostView() {
     };
 
     const testVibration = () => {
+        setApiFeedback({ success: true, message: "REQUESTING TEST VIBRATION..." });
         socket.emit('test-toy', { uid: customName });
+        setTimeout(() => setApiFeedback(null), 2000);
     };
 
     const sendFeedback = (type) => {
@@ -834,15 +845,23 @@ export default function HostView() {
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => {
+                                                                console.log(`[HOST] Approving typist: ${t.slug} (${t.name})`);
                                                                 socket.emit('approve-typist', { slug: t.slug, approved: true });
-                                                                setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                                // Give visual feedback before removing
+                                                                const btn = document.getElementById(`allow-btn-${t.slug}`);
+                                                                if (btn) btn.innerText = "ALLOWED";
+                                                                setTimeout(() => {
+                                                                    setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                                }, 500);
                                                             }}
+                                                            id={`allow-btn-${t.slug}`}
                                                             className="px-6 py-2 bg-green-500 text-black text-[10px] font-black uppercase rounded-xl hover:bg-green-400 transition-colors"
                                                         >
                                                             ALLOW
                                                         </button>
                                                         <button
                                                             onClick={() => {
+                                                                console.log(`[HOST] Denying typist: ${t.slug}`);
                                                                 socket.emit('approve-typist', { slug: t.slug, approved: false });
                                                                 setTypists(prev => prev.filter(item => item.slug !== t.slug));
                                                             }}
