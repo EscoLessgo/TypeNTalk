@@ -781,7 +781,9 @@ export default function HostView() {
 
                                 <button
                                     onClick={() => {
-                                        socket.emit('host-climax', { uid: customName, slug });
+                                        const targetSlug = slug || slugRef.current;
+                                        console.log(`[HOST] Sending CLIMAX signal to: ${targetSlug}`);
+                                        socket.emit('host-climax', { uid: customName, slug: targetSlug });
                                         setApiFeedback({ success: true, message: "CLIMAX ALERT SENT TO PARTNER! 🔥" });
                                         setTimeout(() => setApiFeedback(null), 3000);
                                     }}
