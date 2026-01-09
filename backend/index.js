@@ -768,13 +768,19 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
 
             if (isV2) {
                 payload.command = "Function";
-                payload.action = `${command}:${Math.min(Math.max(strength, 0), 20)}`;
+                // V2 uses "Vibrate:20", "Rotate:10", etc. Capitalized action usually safe.
+                const actionCmd = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
+                payload.action = `${actionCmd}:${Math.min(Math.max(strength, 0), 20)}`;
             } else {
-                payload.command = command.toLowerCase();
+                // Standard V1 API: command should be "Vibrate", "Rotate", etc.
+                // We force capitalization 
+                payload.command = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
                 payload.strength = Math.min(Math.max(strength, 0), 20);
             }
 
             if (toyId) payload.toyId = toyId;
+
+            console.log(`[LOVENSE] Dispatching to ${domain}:`, JSON.stringify(payload));
 
             const response = await enqueueGlobalRequest(() => axios.post(url, payload, { timeout: 3500 }));
             const isIpBlock = response.data.code === 50500;
@@ -791,7 +797,8 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 message: isSuccess ? `TOY RECEIVED SIGNAL (${domain})` :
                     (isIpBlock ? `LOVENSE BLOCK: Server IP Restricted. Try again in 5min.` : `TOY REJECTED: ${response.data.message || response.data.code || 'Offline'}`),
                 code: response.data.code,
-                url: domain
+                url: domain,
+                details: response.data
             };
 
             console.log(`[LOVENSE] Result from ${domain}:`, isSuccess ? 'SUCCESS' : 'FAILURE', JSON.stringify(response.data));
