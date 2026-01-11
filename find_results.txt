@@ -1,0 +1,21 @@
+73:        const targetSlug = slug || slugRef.current;
+92:        customNameRef.current = customName;
+102:            const id = customNameRef.current.trim().toLowerCase();
+130:            createLink(customNameRef.current.trim().toLowerCase());
+237:        if (savedUid && status === 'setup' && !restorationAttempted.current) {
+239:            restorationAttempted.current = true;
+264:        slugRef.current = slug;
+319:        const targetSlug = slug || slugRef.current;
+334:        const targetSlug = slug || slugRef.current;
+338:            slugRef.current = '';
+360:            if (slugRef.current) {
+371:            if (slugRef.current) setError(null);
+382:                slugRef.current = res.data.slug;
+401:        const targetSlug = slug || slugRef.current;
+418:        const targetSlug = slug || slugRef.current;
+450:        osc.frequency.setValueAtTime(150, osc.context.currentTime);
+451:        osc.frequency.exponentialRampToValueAtTime(40, osc.context.currentTime + 0.1);
+452:        gain.gain.setValueAtTime(0.1, osc.context.currentTime);
+453:        gain.gain.exponentialRampToValueAtTime(0.01, osc.context.currentTime + 0.1);
+455:        osc.stop(osc.context.currentTime + 0.1);
+866:                                        const targetSlug = slug || slugRef.current;

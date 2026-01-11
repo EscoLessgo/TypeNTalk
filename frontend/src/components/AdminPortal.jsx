@@ -62,9 +62,10 @@ export default function AdminPortal() {
         setIsFetchingAnalytics(true);
         try {
             const res = await axios.get(`${API_BASE}/api/analytics/${conn.slug}`);
-            setAnalytics(res.data);
+            setAnalytics(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error('Fetch analytics error:', err);
+            setAnalytics([]);
         } finally {
             setIsFetchingAnalytics(false);
         }
@@ -417,10 +418,10 @@ export default function AdminPortal() {
                                         {/* Specific Stats */}
                                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                             {[
-                                                { label: 'Total Visits', value: analytics.length, icon: Eye, color: 'text-blue-400' },
-                                                { label: 'Unique IPs', value: new Set(analytics.map(a => a.ip)).size, icon: Shield, color: 'text-green-400' },
-                                                { label: 'Countries', value: new Set(analytics.map(a => a.countryCode)).size, icon: Activity, color: 'text-purple-400' },
-                                                { label: 'Cities', value: new Set(analytics.map(a => a.city)).size, icon: Target, color: 'text-pink-400' }
+                                                { label: 'Total Visits', value: (analytics || []).length, icon: Eye, color: 'text-blue-400' },
+                                                { label: 'Unique IPs', value: new Set((analytics || []).map(a => a?.ip).filter(Boolean)).size, icon: Shield, color: 'text-green-400' },
+                                                { label: 'Countries', value: new Set((analytics || []).map(a => a?.countryCode).filter(Boolean)).size, icon: Activity, color: 'text-purple-400' },
+                                                { label: 'Cities', value: new Set((analytics || []).map(a => a?.city).filter(Boolean)).size, icon: Target, color: 'text-pink-400' }
                                             ].map((stat, i) => (
                                                 <div key={i} className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-2">
                                                     <div className="flex items-center gap-2">
@@ -436,8 +437,8 @@ export default function AdminPortal() {
                                         <div className="space-y-6">
                                             <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/20 border-b border-white/5 pb-4">Geographical Insights</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {Object.entries(analytics.reduce((acc, curr) => {
-                                                    const key = `${curr.countryCode}|${curr.city}`;
+                                                {Object.entries((analytics || []).reduce((acc, curr) => {
+                                                    const key = `${curr?.countryCode || '??'}|${curr?.city || 'Unknown'}`;
                                                     acc[key] = (acc[key] || 0) + 1;
                                                     return acc;
                                                 }, {})).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([key, count], i) => {
@@ -465,28 +466,28 @@ export default function AdminPortal() {
                                         <div className="space-y-6">
                                             <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/20 border-b border-white/5 pb-4">Network Activity Log</h3>
                                             <div className="space-y-3">
-                                                {analytics.map((visit, i) => (
+                                                {(analytics || []).map((visit, i) => (
                                                     <div key={i} className="p-4 sm:p-5 bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between group hover:border-purple-500/30 transition-all gap-4 sm:gap-0">
                                                         <div className="flex items-center gap-4">
-                                                            <span className="text-xl sm:text-2xl opacity-80">{getFlagEmoji(visit.countryCode)}</span>
+                                                            <span className="text-xl sm:text-2xl opacity-80">{getFlagEmoji(visit?.countryCode)}</span>
                                                             <div className="space-y-1">
                                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <p className="text-xs sm:text-sm font-black text-white uppercase italic">{visit.city || 'Unknown'}, {visit.regionName || 'UNK'}</p>
-                                                                    <span className="text-[7px] sm:text-[8px] text-white/40 uppercase font-black bg-white/5 px-1.5 py-0.5 rounded w-max">IP: {visit.ip?.replace(/\d+$/, 'xxx')}</span>
+                                                                    <p className="text-xs sm:text-sm font-black text-white uppercase italic">{visit?.city || 'Unknown'}, {visit?.regionName || 'UNK'}</p>
+                                                                    <span className="text-[7px] sm:text-[8px] text-white/40 uppercase font-black bg-white/5 px-1.5 py-0.5 rounded w-max">IP: {visit?.ip?.replace(/\d+$/, 'xxx')}</span>
                                                                 </div>
                                                                 <p className="text-[8px] sm:text-[9px] text-white/30 uppercase font-bold tracking-tight max-w-[200px] sm:max-w-[300px] truncate">
-                                                                    {visit.isp || 'Provider Unknown'}
+                                                                    {visit?.isp || 'Provider Unknown'}
                                                                 </p>
                                                             </div>
                                                         </div>
                                                         <div className="text-left sm:text-right space-y-1 border-t sm:border-0 border-white/5 pt-3 sm:pt-0">
                                                             <p className="text-[9px] sm:text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center sm:justify-end gap-2">
-                                                                <Clock size={10} /> {formatDateTime(visit.createdAt)}
+                                                                <Clock size={10} /> {formatDateTime(visit?.createdAt)}
                                                             </p>
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {analytics.length === 0 && (
+                                                {(analytics || []).length === 0 && (
                                                     <div className="text-center py-20 glass rounded-[2rem] border-dashed border-white/10">
                                                         <Globe className="mx-auto text-white/5 mb-4" size={40} />
                                                         <p className="text-white/10 font-black uppercase tracking-widest">No tracking packets captured yet</p>

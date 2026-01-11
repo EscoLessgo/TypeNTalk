@@ -48,6 +48,7 @@ export default function HostView() {
     const [notifications, setNotifications] = useState([]);
     const [showAnalytics, setShowAnalytics] = useState(false);
     const [isFetchingAnalytics, setIsFetchingAnalytics] = useState(false);
+    const [analytics, setAnalytics] = useState([]);
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -76,7 +77,7 @@ export default function HostView() {
         setIsFetchingAnalytics(true);
         try {
             const res = await axios.get(`${API_BASE}/api/analytics/${targetSlug}`);
-            setAnalytics(res.data);
+            setAnalytics(Array.isArray(res.data) ? res.data : []);
             setShowAnalytics(true);
         } catch (err) {
             console.error('Fetch analytics error:', err);
@@ -99,7 +100,7 @@ export default function HostView() {
         socket.on('connect', () => {
             console.log('[SOCKET] Connected');
             setIsSocketConnected(true);
-            const id = customNameRef.current.trim().toLowerCase();
+            const id = (customNameRef.current || '').trim().toLowerCase();
             if (id) {
                 console.log(`[SOCKET] Re-joining host room: ${id}`);
                 socket.emit('join-host', id);
@@ -127,7 +128,7 @@ export default function HostView() {
             });
 
             // Link is already created/reset in startSession, but we refresh it here to be safe
-            createLink(customNameRef.current.trim().toLowerCase());
+            createLink((customNameRef.current || '').trim().toLowerCase());
         });
 
         socket.on('approval-request', (data = {}) => {
@@ -228,6 +229,14 @@ export default function HostView() {
         }, 3000);
         return () => clearInterval(interval);
     }, [isSocketConnected]);
+
+    const joinHostRoom = () => {
+        const id = (customNameRef.current || '').trim().toLowerCase();
+        if (id) {
+            console.log(`[SOCKET] Joining host room: ${id}`);
+            socket.emit('join-host', id);
+        }
+    };
 
     const restorationAttempted = useRef(false);
     useEffect(() => {
@@ -1246,10 +1255,10 @@ export default function HostView() {
                                 {/* Stats Cards */}
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {[
-                                        { label: 'Total Views', value: analytics.length, icon: Eye, color: 'text-blue-400' },
-                                        { label: 'Unique IPs', value: new Set(analytics.map(a => a.ip)).size, icon: Shield, color: 'text-green-400' },
-                                        { label: 'Countries', value: new Set(analytics.map(a => a.countryCode)).size, icon: Activity, color: 'text-purple-400' },
-                                        { label: 'Cities', value: new Set(analytics.map(a => a.city)).size, icon: Target, color: 'text-pink-400' }
+                                        { label: 'Total Views', value: (analytics || []).length, icon: Eye, color: 'text-blue-400' },
+                                        { label: 'Unique IPs', value: new Set((analytics || []).map(a => a?.ip).filter(Boolean)).size, icon: Shield, color: 'text-green-400' },
+                                        { label: 'Countries', value: new Set((analytics || []).map(a => a?.countryCode).filter(Boolean)).size, icon: Activity, color: 'text-purple-400' },
+                                        { label: 'Cities', value: new Set((analytics || []).map(a => a?.city).filter(Boolean)).size, icon: Target, color: 'text-pink-400' }
                                     ].map((stat, i) => (
                                         <div key={i} className="glass p-6 rounded-3xl border-white/5 space-y-2">
                                             <div className="flex items-center gap-2">
@@ -1266,8 +1275,8 @@ export default function HostView() {
                                     <div className="glass p-8 rounded-3xl border-white/5 space-y-6">
                                         <h3 className="text-xs font-black uppercase tracking-widest text-white/40 border-b border-white/5 pb-4">Top Locations</h3>
                                         <div className="space-y-4">
-                                            {Object.entries(analytics.reduce((acc, curr) => {
-                                                const key = `${curr.countryCode}|${curr.city}`;
+                                            {Object.entries((analytics || []).reduce((acc, curr) => {
+                                                const key = `${curr?.countryCode || '??'}|${curr?.city || 'Unknown'}`;
                                                 acc[key] = (acc[key] || 0) + 1;
                                                 return acc;
                                             }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, count], i) => {
@@ -1293,22 +1302,22 @@ export default function HostView() {
                                     <div className="glass p-8 rounded-3xl border-white/5 space-y-6 flex flex-col">
                                         <h3 className="text-xs font-black uppercase tracking-widest text-white/40 border-b border-white/5 pb-4">Recent Visits</h3>
                                         <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-                                            {analytics.map((visit, i) => (
+                                            {(analytics || []).map((visit, i) => (
                                                 <div key={i} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
                                                     <div className="flex items-center gap-3">
-                                                        <span className="text-xl">{getFlagEmoji(visit.countryCode)}</span>
+                                                        <span className="text-xl">{getFlagEmoji(visit?.countryCode)}</span>
                                                         <div>
-                                                            <p className="text-xs font-black text-white italic uppercase">{visit.city}, {visit.regionName || visit.region}</p>
-                                                            <p className="text-[8px] text-white/30 uppercase font-black tracking-tighter truncate w-32">{visit.isp}</p>
+                                                            <p className="text-xs font-black text-white italic uppercase">{visit?.city || 'Unknown'}, {visit?.regionName || visit?.region || '??'}</p>
+                                                            <p className="text-[8px] text-white/30 uppercase font-black tracking-tighter truncate w-32">{visit?.isp || 'Unknown ISP'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-[9px] font-black text-white uppercase">{formatRelativeTime(visit.createdAt)}</p>
-                                                        <p className="text-[8px] text-white/20 font-mono">{visit.ip?.replace(/\d+$/, 'xxx')}</p>
+                                                        <p className="text-[9px] font-black text-white uppercase">{formatRelativeTime(visit?.createdAt)}</p>
+                                                        <p className="text-[8px] text-white/20 font-mono">{(visit?.ip || '0.0.0.0').replace(/\d+$/, 'xxx')}</p>
                                                     </div>
                                                 </div>
                                             ))}
-                                            {analytics.length === 0 && <p className="text-center py-10 text-white/20 uppercase text-[10px] font-black tracking-widest">No visits recorded</p>}
+                                            {(analytics || []).length === 0 && <p className="text-center py-10 text-white/20 uppercase text-[10px] font-black tracking-widest">No visits recorded</p>}
                                         </div>
                                     </div>
                                 </div>

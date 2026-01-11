@@ -1,0 +1,19 @@
+222:        if (now - lastPulseRef.current > 100) { // Throttling
+226:            lastPulseRef.current = now;
+273:            streamRef.current = stream;
+278:            audioContextRef.current = new AudioContext();
+279:            const source = audioContextRef.current.createMediaStreamSource(stream);
+280:            const analyzer = audioContextRef.current.createAnalyser();
+283:            analyzerRef.current = analyzer;
+285:            isMicOnRef.current = true;
+295:        if (streamRef.current) {
+296:            streamRef.current.getTracks().forEach(t => t.stop());
+298:        if (audioContextRef.current) {
+299:            audioContextRef.current.close();
+301:        isMicOnRef.current = false;
+307:        if (!analyzerRef.current || !isMicOnRef.current) return;
+309:        const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
+310:        analyzerRef.current.getByteFrequencyData(dataArray);
+334:            if (now - lastPulseRef.current > 100) {
+339:                lastPulseRef.current = now;
+343:        if (isMicOnRef.current) requestAnimationFrame(processAudio);
