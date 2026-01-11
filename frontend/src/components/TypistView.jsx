@@ -104,6 +104,12 @@ export default function TypistView() {
             if (data.active) setIsClimaxRequested(false);
         });
 
+        socket.on('session-terminated', (data = {}) => {
+            console.log('[SOCKET] Session terminated by host');
+            setError(data.message || 'Session ended by host.');
+            setStatus('invalid');
+        });
+
         return () => {
             socket.off('connect');
             socket.off('disconnect');
@@ -112,6 +118,7 @@ export default function TypistView() {
             socket.off('preset-update');
             socket.off('climax-requested');
             socket.off('overdrive-status');
+            socket.off('session-terminated');
             stopMic();
         };
     }, [slug]);
@@ -307,7 +314,10 @@ export default function TypistView() {
             const now = Date.now();
             // Fast Lane: 100ms throttle for 'liquid' feel without flooding
             if (now - lastPulseRef.current > 100) {
-                socket.emit('voice-pulse', { slug, intensity: normalized });
+                // SECURITY: Verify status is connected before sending any pulses
+                if (status === 'connected') {
+                    socket.emit('voice-pulse', { slug, intensity: normalized });
+                }
                 lastPulseRef.current = now;
             }
         }

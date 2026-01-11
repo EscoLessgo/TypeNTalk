@@ -46,9 +46,9 @@ export default function HostView() {
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [showAnalytics, setShowAnalytics] = useState(false);
-    const [analytics, setAnalytics] = useState([]);
     const [isFetchingAnalytics, setIsFetchingAnalytics] = useState(false);
     const audioRef = useRef(null);
+    const slugRef = useRef('');
 
     const getFlagEmoji = (countryCode) => {
         if (!countryCode) return '🌐';
@@ -259,6 +259,10 @@ export default function HostView() {
         }
     }, [slug, status, isLoading]);
 
+    useEffect(() => {
+        slugRef.current = slug;
+    }, [slug]);
+
     const startSession = async () => {
         const baseId = customName.trim().toLowerCase();
         if (!baseId) {
@@ -309,15 +313,32 @@ export default function HostView() {
         }
     };
 
-    const resetSession = () => {
+    const resetSession = async () => {
         const currentUid = localStorage.getItem('lovense_uid');
+        const targetSlug = slug || slugRef.current;
+
+        if (targetSlug) {
+            socket.emit('terminate-session', { slug: targetSlug });
+        }
+
         if (currentUid) {
-            // Tell server to clear cache for this ID too
             socket.emit('clear-qr-cache', { username: currentUid });
         }
         localStorage.removeItem('lovense_uid');
-        localStorage.removeItem('host_custom_name'); // Clear name too for a fresh start
-        window.location.assign(window.location.pathname); // Force fresh reload
+        localStorage.removeItem('host_custom_name');
+        window.location.assign(window.location.pathname);
+    };
+
+    const terminateSession = () => {
+        const targetSlug = slug || slugRef.current;
+        if (targetSlug) {
+            socket.emit('terminate-session', { slug: targetSlug });
+            setSlug('');
+            slugRef.current = '';
+            setStatus('setup');
+            setApiFeedback({ success: true, message: "SESSION TERMINATED. LINK DESTROYED." });
+            setTimeout(() => setApiFeedback(null), 3000);
+        }
     };
 
     const copyPairingCode = () => {
@@ -350,7 +371,7 @@ export default function HostView() {
         }
     };
 
-    const slugRef = useRef('');
+
     const createLink = async (uid) => {
         if (!uid) return;
         try {
@@ -1082,6 +1103,19 @@ export default function HostView() {
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Session Management */}
+                        <div className="glass p-5 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest leading-none">
+                                <Shield size={12} className="text-red-400" /> Session Control
+                            </div>
+                            <button
+                                onClick={terminateSession}
+                                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                            >
+                                DESTROY SESSION & LINK
+                            </button>
                         </div>
                     </div>
                 </div>

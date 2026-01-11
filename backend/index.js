@@ -37,18 +37,33 @@ async function getHost(uid) {
 
 async function getConnection(slug) {
     if (!slug) return null;
+
+    // Check memory first for ephemeral status
+    const memConn = memoryStore.connections.get(slug);
+
     try {
         const conn = await prisma.connection.findUnique({
             where: { slug },
             include: { host: true }
         });
         if (conn) {
-            if (conn.host && typeof conn.host.toys === 'string') conn.host.toys = JSON.parse(conn.host.toys);
+            // Merge memory status if it exists
+            if (memConn) return { ...conn, approved: memConn.approved };
+
+            // If not in memory but in DB, seed memory
+            memoryStore.connections.set(slug, {
+                slug: conn.slug,
+                hostId: conn.hostId,
+                hostUid: conn.host?.uid,
+                approved: conn.approved,
+                createdAt: conn.createdAt
+            });
             return conn;
         }
-    } catch (e) { }
+    } catch (e) {
+        console.error('[DB] Error fetching connection:', slug, e.message);
+    }
 
-    const memConn = memoryStore.connections.get(slug);
     if (memConn) {
         // Hydrate host for memory connection
         const host = await getHost(memConn.hostUid);
@@ -304,16 +319,32 @@ app.post('/api/connections/create', async (req, res) => {
 
         if (existingSlug) {
             console.log(`[SESSION] Reusing existing slug ${existingSlug} for host ${uid} | Resetting Approval: REQUIRED`);
+
+            // 1. Memory Sync FIRST (Atomic for current server session)
+            const memConn = memoryStore.connections.get(existingSlug);
+            if (memConn) {
+                memConn.approved = false;
+            } else {
+                memoryStore.connections.set(existingSlug, {
+                    slug: existingSlug,
+                    hostId: host.id,
+                    hostUid: uid,
+                    approved: false,
+                    createdAt: new Date()
+                });
+            }
+
+            // 2. DB Sync
             try {
                 await prisma.connection.update({
                     where: { slug: existingSlug },
                     data: { approved: false }
                 });
             } catch (e) {
-                const memConn = memoryStore.connections.get(existingSlug);
-                if (memConn) memConn.approved = false; // Ensure memory store is updated synchronously
+                console.warn('[DB] Failed to reset approval in DB, but memory is updated.');
             }
-            // Explicitly notify any connected sockets that approval is now required
+
+            // 3. Notify
             io.to(`typist:${existingSlug}`).emit('approval-status', { approved: false });
             return res.json({ slug: existingSlug });
         }
@@ -736,6 +767,26 @@ io.on('connection', (socket) => {
             success: true,
             message: "CLIMAX ALERT DELIVERED! 🔥"
         });
+    });
+
+    socket.on('terminate-session', async ({ slug }) => {
+        if (!slug) return;
+        console.log(`[TERMINATE] Host requested termination for ${slug}`);
+
+        try {
+            await prisma.connection.update({
+                where: { slug },
+                data: { approved: false }
+            });
+        } catch (e) {
+            const mem = memoryStore.connections.get(slug);
+            if (mem) mem.approved = false;
+        }
+
+        io.to(`typist:${slug}`).emit('session-terminated', {
+            message: "Host has ended the session. Connection terminated."
+        });
+        io.to(`typist:${slug}`).emit('approval-status', { approved: false });
     });
 
     socket.on('trigger-climax', async ({ slug, pattern }) => {
