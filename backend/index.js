@@ -512,6 +512,18 @@ app.get('/api/admin/connections', async (req, res) => {
     }
 });
 
+// Admin - Delete Connection
+app.delete('/api/admin/connections/:slug', async (req, res) => {
+    const { slug } = req.params;
+    try {
+        memoryStore.connections.delete(slug);
+        await prisma.connection.delete({ where: { slug } });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Socket.io Logic
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);

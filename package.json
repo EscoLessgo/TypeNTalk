@@ -1,13 +1,17 @@
 {
   "name": "lovense-sync",
   "version": "1.0.0",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "start": "node backend/index.js",
-    "build": "cd frontend && npm run build && cd ../backend && npx prisma generate",
-    "build:full": "cd frontend && npm install --legacy-peer-deps && npm run build && cd ../backend && npm install --legacy-peer-deps && npx prisma generate",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build:frontend": "cd frontend && npm run build"
+    "build": "npm run build -w frontend && cd backend && npx prisma generate",
+    "build:full": "npm install --legacy-peer-deps && npm run build -w frontend && cd backend && npx prisma generate",
+    "install:all": "npm install",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build:frontend": "npm run build -w frontend"
   }
 }
