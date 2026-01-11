@@ -2,7 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Component } from 'react';
 import HostView from './components/HostView';
 import TypistView from './components/TypistView';
-import { Heart, Command } from 'lucide-react';
+import AdminPortal from './components/AdminPortal';
+import { Heart, Command, Shield } from 'lucide-react';
 
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null };
@@ -51,6 +52,9 @@ function App() {
               </span>
             </Link>
             <div className="flex gap-6 text-sm font-medium text-white/50">
+              <Link to="/admin" className="hover:text-purple-400 transition-colors uppercase text-[10px] font-black tracking-widest flex items-center gap-2">
+                <Shield size={14} /> Admin
+              </Link>
               <button
                 onClick={() => { localStorage.clear(); window.location.reload(); }}
                 className="hover:text-red-400 transition-colors uppercase text-[10px] font-black tracking-widest"
@@ -64,6 +68,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HostView />} />
               <Route path="/t/:slug" element={<TypistView />} />
+              <Route path="/admin" element={<AdminPortal />} />
               {/* Catch-all for invalid URLs - shows a message with a manual link */}
               <Route path="*" element={
                 <div className="text-center p-20 space-y-6">

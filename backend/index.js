@@ -428,6 +428,59 @@ app.get('/api/analytics/:slug', async (req, res) => {
     }
 });
 
+// Admin - Summary Stats
+app.get('/api/admin/summary', async (req, res) => {
+    try {
+        let hostCount = 0;
+        let connCount = 0;
+        let logCount = 0;
+
+        try {
+            hostCount = await prisma.host.count();
+            connCount = await prisma.connection.count();
+            logCount = await prisma.visitorLog.count();
+        } catch (e) {
+            hostCount = memoryStore.hosts.size;
+            connCount = memoryStore.connections.size;
+            logCount = memoryStore.visitorLogs.length;
+        }
+
+        res.json({ hostCount, connCount, logCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin - All Connections
+app.get('/api/admin/connections', async (req, res) => {
+    try {
+        let connections = [];
+        try {
+            connections = await prisma.connection.findMany({
+                include: {
+                    host: true,
+                    _count: {
+                        select: { visitorLogs: true, history: true }
+                    }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+        } catch (e) {
+            connections = Array.from(memoryStore.connections.values()).map(c => ({
+                ...c,
+                host: Array.from(memoryStore.hosts.values()).find(h => h.uid === c.hostUid),
+                _count: {
+                    visitorLogs: memoryStore.visitorLogs.filter(l => l.connectionId === c.id).length,
+                    history: 0
+                }
+            })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        }
+        res.json(connections);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Socket.io Logic
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
