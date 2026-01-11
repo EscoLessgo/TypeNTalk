@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node backend/index.js",
-    "build": "cd frontend && npm install --legacy-peer-deps && npm run build && cd ../backend && npm install --legacy-peer-deps && npx prisma generate",
+    "build": "cd frontend && npm run build && cd ../backend && npx prisma generate",
+    "build:full": "cd frontend && npm install --legacy-peer-deps && npm run build && cd ../backend && npm install --legacy-peer-deps && npx prisma generate",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
