@@ -604,7 +604,12 @@ io.on('connection', (socket) => {
         const room = `typist:${slug}`;
         const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
 
-        console.log(`[SIGNAL] Host ${uid} -> Typist ${slug} (Room Size: ${roomSize}) | Type: ${type}`);
+        console.log(`[SIGNAL] Host "${uid}" -> Typist room "${room}" (Size: ${roomSize}) | Type: ${type}`);
+
+        if (!slug) {
+            socket.emit('api-feedback', { success: false, message: "ERROR: Missing connection slug." });
+            return;
+        }
 
         if (roomSize === 0) {
             console.warn(`[SIGNAL] Warning: Room ${room} is EMPTY. Signal dropped.`);
@@ -618,8 +623,19 @@ io.on('connection', (socket) => {
         io.to(room).emit('host-feedback', { type });
         socket.emit('api-feedback', {
             success: true,
-            message: `Feedback Delivered to Partner (${type.toUpperCase()})`
+            message: `Feedback Delivered (${type.toUpperCase()})`
         });
+    });
+
+    socket.on('host-message', (data = {}) => {
+        const { slug, text, uid } = data;
+        if (!slug || !text) return;
+
+        const room = `typist:${slug}`;
+        console.log(`[MESSAGE] Host ${uid} -> Typist ${slug}: ${text}`);
+
+        io.to(room).emit('host-message', { text, from: uid || 'Host' });
+        socket.emit('api-feedback', { success: true, message: "Message Sent to Partner" });
     });
 
     socket.on('set-base-floor', ({ uid, level }) => {
@@ -725,26 +741,47 @@ io.on('connection', (socket) => {
 
     // Final surge
     socket.on('final-surge', async ({ slug, text, pulses }) => {
+        console.log(`[SURGE] Request from ${slug} | Text: ${text?.substring(0, 20)}...`);
         const conn = await getConnection(slug);
         const isApproved = conn?.approved === true;
 
-        if (conn && conn.host && isApproved) {
+        if (!conn) {
+            socket.emit('error', 'Connection not found.');
+            return;
+        }
+
+        if (!isApproved) {
+            console.warn(`[SURGE] BLOCKED: Typist ${slug} is not approved.`);
+            socket.emit('api-feedback', { success: false, message: "SURGE BLOCKED: You are not approved by the host yet." });
+            return;
+        }
+
+        if (conn.host) {
             const surgeIntensity = 20; // 100% power
             const duration = 3; // Fixed 3 seconds
 
+            console.log(`[SURGE] Executing for host ${conn.host.uid} at 100%`);
             sendCommand(conn.host.uid, 'vibrate', surgeIntensity, duration);
             io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
 
             // Save to history
-            await prisma.responseHistory.create({
-                data: {
-                    connectionId: conn.id,
-                    text,
-                    pulses: JSON.stringify(pulses || [])
-                }
-            });
+            try {
+                await prisma.responseHistory.create({
+                    data: {
+                        connectionId: conn.id,
+                        text,
+                        pulses: JSON.stringify(pulses || [])
+                    }
+                });
+            } catch (e) {
+                console.error('[DB] Failed to save surge history:', e.message);
+            }
 
             io.to(`host:${conn.host.uid}`).emit('new-message', { text });
+            socket.emit('api-feedback', { success: true, message: "SURGE DELIVERED 🔥" });
+        } else {
+            console.error(`[SURGE] ERROR: No host linked to slug ${slug}`);
+            socket.emit('api-feedback', { success: false, message: "SIGNAL ERROR: No host found for this link." });
         }
     });
 

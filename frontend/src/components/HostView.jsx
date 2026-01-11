@@ -29,6 +29,7 @@ export default function HostView() {
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [copied, setCopied] = useState(false);
     const [messages, setMessages] = useState([]);
+    const [hostMessage, setHostMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [intensity, setIntensity] = useState(0); // 0-100 for visual meter
     const [lastAction, setLastAction] = useState(null); // 'typing' or 'voice'
@@ -410,6 +411,28 @@ export default function HostView() {
         // Visual feedback locally
         setApiFeedback({ success: true, message: `Feedback Sent: ${type.toUpperCase()}` });
         setTimeout(() => setApiFeedback(null), 3000);
+    };
+
+    const sendHostMessage = (e) => {
+        if (e) e.preventDefault();
+        const targetSlug = slug || slugRef.current;
+        if (!hostMessage.trim() || !targetSlug) return;
+
+        socket.emit('host-message', {
+            uid: customName,
+            text: hostMessage,
+            slug: targetSlug
+        });
+
+        // Add to local history
+        setMessages(prev => [{
+            id: Date.now(),
+            text: `Host: ${hostMessage}`,
+            timestamp: new Date(),
+            isHost: true
+        }, ...prev]);
+
+        setHostMessage('');
     };
 
     const setPreset = (preset) => {
@@ -1010,9 +1033,9 @@ export default function HostView() {
                                             key={msg?.id || Math.random()}
                                             initial={{ opacity: 0, x: -20 }}
                                             animate={{ opacity: 1, x: 0 }}
-                                            className="p-6 rounded-3xl bg-white/[0.03] border border-white/5 hover:border-purple-500/20 transition-all text-left group"
+                                            className={`p-6 rounded-3xl border transition-all text-left group ${msg.isHost ? 'bg-purple-500/10 border-purple-500/20' : 'bg-white/[0.03] border-white/5 hover:border-purple-500/20'}`}
                                         >
-                                            <p className="text-xl text-white/90 font-medium leading-relaxed group-hover:text-white transition-colors">
+                                            <p className={`text-xl font-medium leading-relaxed transition-colors ${msg.isHost ? 'text-purple-300' : 'text-white/90 group-hover:text-white'}`}>
                                                 {msg?.text || ''}
                                             </p>
                                             <div className="flex items-center gap-3 mt-4">
@@ -1027,6 +1050,23 @@ export default function HostView() {
                                     ))
                                 )}
                             </div>
+
+                            {/* Host Message Input */}
+                            <form onSubmit={sendHostMessage} className="relative mt-6 pt-6 border-t border-white/5">
+                                <input
+                                    type="text"
+                                    value={hostMessage}
+                                    onChange={(e) => setHostMessage(e.target.value)}
+                                    placeholder="Whisper back to your partner..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-sm font-bold placeholder:text-white/10 focus:border-purple-500/50 outline-none transition-all"
+                                />
+                                <button
+                                    type="submit"
+                                    className="absolute right-2 top-[calc(1.5rem+6px)] p-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-lg"
+                                >
+                                    <ArrowRight size={18} />
+                                </button>
+                            </form>
                         </div>
                     </div>
 

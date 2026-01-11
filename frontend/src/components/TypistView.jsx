@@ -35,6 +35,7 @@ export default function TypistView() {
     const [activePreset, setActivePreset] = useState('none');
     const [isClimaxRequested, setIsClimaxRequested] = useState(false);
     const [notifications, setNotifications] = useState([]); // Array of {id, type, message, time}
+    const [messages, setMessages] = useState([]);
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
@@ -99,6 +100,19 @@ export default function TypistView() {
             setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 10000);
         });
 
+        socket.on('host-message', (data = {}) => {
+            console.log('[SOCKET] Host message:', data);
+            const { text, from } = data;
+            if (!text) return;
+
+            setMessages(prev => [{ id: Date.now(), text, timestamp: new Date(), from: from || 'Host' }, ...prev]);
+
+            // Also trigger a notification
+            const nid = Date.now();
+            setNotifications(prev => [{ id: nid, type: 'surge', msg: `MESSAGE FROM HOST: ${text}`, icon: 'zap' }, ...prev].slice(0, 3));
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== nid)), 5000);
+        });
+
         socket.on('overdrive-status', (data = {}) => {
             setIsOverdrive(data.active);
             if (data.active) setIsClimaxRequested(false);
@@ -119,6 +133,7 @@ export default function TypistView() {
             socket.off('climax-requested');
             socket.off('overdrive-status');
             socket.off('session-terminated');
+            socket.off('host-message');
             stopMic();
         };
     }, [slug]);
@@ -221,6 +236,9 @@ export default function TypistView() {
         if (!text.trim()) return;
         const pulses = [{ time: 0, intensity: 20, duration: 3 }];
         socket.emit('final-surge', { slug, text, pulses });
+
+        // Local message history
+        setMessages(prev => [{ id: Date.now(), text, timestamp: new Date() }, ...prev]);
 
         // Local notification
         const id = Date.now();
@@ -763,6 +781,43 @@ export default function TypistView() {
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Message History */}
+            <div className="glass p-8 sm:p-10 rounded-[2.5rem] space-y-6">
+                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                    <h2 className="text-xl font-black italic uppercase text-white tracking-widest">Whisper History</h2>
+                    <span className="text-[10px] text-white/20 font-black uppercase tracking-widest">{messages.length} Exchanges</span>
+                </div>
+
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {messages.length === 0 ? (
+                        <div className="text-center py-10 text-white/10 uppercase text-[10px] font-black tracking-widest border border-dashed border-white/10 rounded-2xl">
+                            The space between you is silent...
+                        </div>
+                    ) : (
+                        messages.map((msg) => (
+                            <motion.div
+                                key={msg.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`p-5 rounded-2xl border transition-all ${msg.from ? 'bg-pink-500/10 border-pink-500/20 ml-8 md:ml-20' : 'bg-white/5 border-white/5 mr-8 md:mr-20'}`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[8px] font-black uppercase tracking-widest ${msg.from ? 'text-pink-400' : 'text-purple-400'}`}>
+                                        {msg.from ? 'SIGNAL FROM PARTNER' : 'YOU SENT'}
+                                    </span>
+                                    <span className="text-[8px] text-white/20 font-mono">
+                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+                                <p className={`text-sm sm:text-lg font-medium ${msg.from ? 'text-white' : 'text-white/70'}`}>
+                                    {msg.text}
+                                </p>
+                            </motion.div>
+                        ))
+                    )}
                 </div>
             </div>
 
