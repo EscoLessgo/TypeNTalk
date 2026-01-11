@@ -392,7 +392,7 @@ export default function TypistView() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-20 relative">
+        <div className="max-w-5xl mx-auto space-y-6 pb-20 relative px-4 sm:px-0">
             {/* Notification System Overlay */}
             <AnimatePresence>
                 {notifications.length > 0 && (
@@ -618,9 +618,9 @@ export default function TypistView() {
                 )}
             </AnimatePresence>
 
-            <div className="flex items-center justify-between glass px-8 py-4 rounded-3xl relative border-purple-500/20 shadow-lg shadow-purple-500/5">
+            <div className="flex flex-col sm:flex-row items-center justify-between glass px-6 sm:px-8 py-4 rounded-3xl relative border-purple-500/20 shadow-lg shadow-purple-500/5 gap-4 sm:gap-0">
                 {/* Status Indicator */}
-                <div className="absolute -top-12 right-0 flex items-center gap-4">
+                <div className="absolute -top-12 right-0 flex items-center gap-2 sm:gap-4">
                     <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-full">
                         <span className={`text-[9px] font-black uppercase tracking-widest ${latency > 150 ? 'text-red-400' : latency > 80 ? 'text-yellow-400' : 'text-green-400'}`}>
                             {latency}ms
@@ -674,9 +674,9 @@ export default function TypistView() {
 
                     <button
                         onClick={toggleMic}
-                        className={`p-3 rounded-2xl transition-all border ${isMicOn ? 'bg-pink-500/20 text-pink-400 border-pink-500/40 kinky-glow' : 'bg-white/5 text-white/40 border-white/5'}`}
+                        className={`p-2.5 sm:p-3 rounded-2xl transition-all border ${isMicOn ? 'bg-pink-500/20 text-pink-400 border-pink-500/40 kinky-glow' : 'bg-white/5 text-white/40 border-white/5'}`}
                     >
-                        {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
+                        {isMicOn ? <Mic size={20} className="sm:w-6 sm:h-6" /> : <MicOff size={20} className="sm:w-6 sm:h-6" />}
                     </button>
                     {isMicOn && (
                         <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden border border-white/5">
@@ -751,12 +751,12 @@ export default function TypistView() {
                             </button>
                             <button
                                 onClick={() => setShowGuide(true)}
-                                className="p-3 text-white/20 hover:text-white transition-colors"
+                                className="p-3 text-white/20 hover:text-white transition-colors hidden sm:block"
                             >
                                 <HelpCircle size={18} />
                             </button>
                             <button
-                                className="button-premium flex items-center gap-3 group px-12"
+                                className="button-premium flex items-center gap-3 group px-6 sm:px-12 text-xs sm:text-base"
                                 onClick={sendSurge}
                             >
                                 FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />

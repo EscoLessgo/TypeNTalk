@@ -100,7 +100,7 @@ export default function AdminPortal() {
                         <Shield className="text-purple-400" size={12} />
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Admin Control Center</span>
                     </div>
-                    <h1 className="text-5xl font-black italic uppercase tracking-tighter text-white">
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white">
                         SYSTEM <span className="text-gradient">OVERWATCH</span>
                     </h1>
                 </div>
@@ -117,18 +117,18 @@ export default function AdminPortal() {
             </header>
 
             {/* Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {[
                     { label: 'Active Hosts', value: summary?.hostCount, icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/5' },
                     { label: 'Total Channels', value: summary?.connCount, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-400/5' },
                     { label: 'Tracking Events', value: summary?.logCount, icon: Globe, color: 'text-pink-400', bg: 'bg-pink-400/5' }
                 ].map((stat, i) => (
-                    <div key={i} className={`glass p-8 rounded-[2.5rem] border-white/5 space-y-4 ${stat.bg}`}>
+                    <div key={i} className={`glass p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border-white/5 space-y-3 sm:space-y-4 ${stat.bg}`}>
                         <div className="flex items-center justify-between">
-                            <stat.icon className={stat.color} size={24} />
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20">{stat.label}</span>
+                            <stat.icon className={stat.color} size={20} />
+                            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-white/20">{stat.label}</span>
                         </div>
-                        <p className="text-5xl font-black text-white tracking-tighter">{stat.value}</p>
+                        <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">{stat.value}</p>
                     </div>
                 ))}
             </div>
@@ -136,11 +136,11 @@ export default function AdminPortal() {
             {/* Main Content Area */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Connection List */}
-                <div className="lg:col-span-12 glass rounded-[3rem] border-white/5 overflow-hidden flex flex-col min-h-[600px]">
-                    <div className="p-8 border-b border-white/5 bg-white/[0.02] flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="lg:col-span-12 glass rounded-[2rem] sm:rounded-[3rem] border-white/5 overflow-hidden flex flex-col min-h-[500px] sm:min-h-[600px]">
+                    <div className="p-6 sm:p-8 border-b border-white/5 bg-white/[0.02] flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div className="space-y-1">
-                            <h2 className="text-xl font-black italic uppercase text-white">Connection Registry</h2>
-                            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em]">Listing {filteredConnections.length} active sessions</p>
+                            <h2 className="text-lg sm:text-xl font-black italic uppercase text-white">Connection Registry</h2>
+                            <p className="text-[9px] sm:text-[10px] text-white/40 uppercase tracking-[0.2em]">Listing {filteredConnections.length} sessions</p>
                         </div>
 
                         <div className="relative flex-1 max-w-md">
@@ -158,13 +158,13 @@ export default function AdminPortal() {
                     <div className="flex-1 overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="text-[10px] font-black uppercase tracking-widest text-white/30 bg-white/[0.01]">
-                                    <th className="px-8 py-6 border-b border-white/5">Session Slug</th>
-                                    <th className="px-8 py-6 border-b border-white/5">Host Identity</th>
-                                    <th className="px-8 py-6 border-b border-white/5 text-center">Logs</th>
-                                    <th className="px-8 py-6 border-b border-white/5 text-center">Status</th>
-                                    <th className="px-8 py-6 border-b border-white/5">Created At</th>
-                                    <th className="px-8 py-6 border-b border-white/5 text-right">Actions</th>
+                                <tr className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-white/30 bg-white/[0.01]">
+                                    <th className="px-6 sm:px-8 py-6 border-b border-white/5">Session Slug</th>
+                                    <th className="px-6 sm:px-8 py-6 border-b border-white/5">Host Identity</th>
+                                    <th className="px-6 sm:px-8 py-6 border-b border-white/5 text-center">Logs</th>
+                                    <th className="px-4 py-6 border-b border-white/5 text-center">Status</th>
+                                    <th className="px-6 sm:px-8 py-6 border-b border-white/5 hidden sm:table-cell">Created At</th>
+                                    <th className="px-6 sm:px-8 py-6 border-b border-white/5 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -190,7 +190,7 @@ export default function AdminPortal() {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6 text-[10px] font-bold text-white/40 uppercase tracking-tight">
+                                        <td className="px-6 sm:px-8 py-6 text-[9px] sm:text-[10px] font-bold text-white/40 uppercase tracking-tight hidden sm:table-cell">
                                             {formatDateTime(conn.createdAt)}
                                         </td>
                                         <td className="px-8 py-6 text-right">
@@ -315,24 +315,23 @@ export default function AdminPortal() {
                                             <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/20 border-b border-white/5 pb-4">Network Activity Log</h3>
                                             <div className="space-y-3">
                                                 {analytics.map((visit, i) => (
-                                                    <div key={i} className="p-5 bg-white/[0.01] border border-white/5 rounded-2xl flex items-center justify-between group hover:border-purple-500/30 transition-all">
+                                                    <div key={i} className="p-4 sm:p-5 bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between group hover:border-purple-500/30 transition-all gap-4 sm:gap-0">
                                                         <div className="flex items-center gap-4">
-                                                            <span className="text-2xl opacity-80">{getFlagEmoji(visit.countryCode)}</span>
+                                                            <span className="text-xl sm:text-2xl opacity-80">{getFlagEmoji(visit.countryCode)}</span>
                                                             <div className="space-y-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="text-sm font-black text-white uppercase italic">{visit.city}, {visit.regionName}</p>
-                                                                    <span className="text-[8px] text-white/40 uppercase font-black bg-white/5 px-1.5 py-0.5 rounded">IP: {visit.ip?.replace(/\d+$/, 'xxx')}</span>
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <p className="text-xs sm:text-sm font-black text-white uppercase italic">{visit.city || 'Unknown'}, {visit.regionName || 'UNK'}</p>
+                                                                    <span className="text-[7px] sm:text-[8px] text-white/40 uppercase font-black bg-white/5 px-1.5 py-0.5 rounded w-max">IP: {visit.ip?.replace(/\d+$/, 'xxx')}</span>
                                                                 </div>
-                                                                <p className="text-[9px] text-white/30 uppercase font-bold tracking-tight max-w-[300px] truncate">
-                                                                    {visit.isp || 'Provider Unknown'} — {visit.org}
+                                                                <p className="text-[8px] sm:text-[9px] text-white/30 uppercase font-bold tracking-tight max-w-[200px] sm:max-w-[300px] truncate">
+                                                                    {visit.isp || 'Provider Unknown'}
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div className="text-right space-y-1">
-                                                            <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center justify-end gap-2">
-                                                                <Clock size={12} /> {formatDateTime(visit.createdAt)}
+                                                        <div className="text-left sm:text-right space-y-1 border-t sm:border-0 border-white/5 pt-3 sm:pt-0">
+                                                            <p className="text-[9px] sm:text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center sm:justify-end gap-2">
+                                                                <Clock size={10} /> {formatDateTime(visit.createdAt)}
                                                             </p>
-                                                            <p className="text-[8px] text-white/10 font-bold uppercase tracking-tight">{visit.timezone}</p>
                                                         </div>
                                                     </div>
                                                 ))}

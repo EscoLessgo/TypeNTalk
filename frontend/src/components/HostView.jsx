@@ -807,7 +807,7 @@ export default function HostView() {
             )}
 
             {status === 'connected' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-in fade-in zoom-in-95 items-start">
                     {/* COLUMN 1: Visuals & Core Status (Left) */}
                     <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8 order-2 lg:order-1">
                         <div className={`glass p-6 rounded-[2rem] border-green-500/20 relative overflow-hidden transition-all duration-500 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : 'bg-green-500/[0.02]'}`}>
@@ -846,7 +846,7 @@ export default function HostView() {
                                         setApiFeedback({ success: true, message: "CLIMAX ALERT SENT TO PARTNER! 🔥" });
                                         setTimeout(() => setApiFeedback(null), 3000);
                                     }}
-                                    className="w-full py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 rounded-2xl text-white text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-red-500/20 active:scale-95 transition-all mt-4 border border-red-400/30 kinky-glow-red"
+                                    className="w-full py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 rounded-2xl text-white text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-red-500/20 active:scale-95 transition-all mt-4 border border-red-400/30 kinky-glow-red"
                                 >
                                     🔥 I'M GONNA CUM! 🔥
                                 </button>
@@ -1039,7 +1039,7 @@ export default function HostView() {
                                     <h2 className="text-xs font-black text-white italic uppercase tracking-widest">Partner Link</h2>
                                     <p className="text-[8px] text-white/40 uppercase tracking-[0.2em] mt-1">Share this to start</p>
                                 </div>
-                                <code className="block text-[10px] font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5 break-all text-center">
+                                <code className="block text-[8px] sm:text-[10px] font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5 break-all text-center">
                                     {window.location.host}/t/{slug}
                                 </code>
                                 <div className="grid grid-cols-1 gap-2">
