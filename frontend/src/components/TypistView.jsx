@@ -128,6 +128,26 @@ export default function TypistView() {
         return () => clearInterval(interval);
     }, [isSocketConnected]);
 
+    const trackAnalytics = async () => {
+        try {
+            const tracked = sessionStorage.getItem(`tracked_${slug}`);
+            if (tracked) return;
+
+            // Get location from ip-api (Free tier, no key needed)
+            const geoRes = await axios.get('http://ip-api.com/json/?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query');
+
+            if (geoRes.data && geoRes.data.status === 'success') {
+                await axios.post(`${API_BASE}/api/analytics/track`, {
+                    slug,
+                    locationData: geoRes.data
+                });
+                sessionStorage.setItem(`tracked_${slug}`, 'true');
+            }
+        } catch (err) {
+            console.warn('[ANALYTICS] Failed to track location:', err.message);
+        }
+    };
+
     const checkSlug = async () => {
         const cleanSlug = (slug || '').trim();
         if (!cleanSlug) {
@@ -156,6 +176,9 @@ export default function TypistView() {
                 console.log('[TYPIST] Status: entry');
                 setStatus('entry');
             }
+
+            // Track analytics in the background
+            trackAnalytics();
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
             const errorMsg = err.response?.data?.error || err.message || 'Link invalid or server unreachable';

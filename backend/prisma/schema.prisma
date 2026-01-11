@@ -26,6 +26,7 @@ model Connection {
   host      Host     @relation(fields: [hostId], references: [id])
   approved  Boolean  @default(false)
   history   ResponseHistory[]
+  visitorLogs VisitorLog[]
   createdAt DateTime @default(now())
 }
 
@@ -36,5 +37,25 @@ model ResponseHistory {
   text         String
   pulses       String?    // JSON string array of {time, intensity, duration}
   isFavorite   Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+}
+
+model VisitorLog {
+  id           String     @id @default(uuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id])
+  ip           String?
+  city         String?
+  region       String?
+  regionName   String?
+  country      String?
+  countryCode  String?
+  isp          String?
+  org          String?
+  as           String?
+  zip          String?
+  lat          Float?
+  lon          Float?
+  timezone     String?
   createdAt    DateTime   @default(now())
 }

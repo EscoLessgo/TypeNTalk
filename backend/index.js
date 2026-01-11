@@ -18,7 +18,8 @@ const prisma = new PrismaClient();
 const memoryStore = {
     hosts: new Map(), // uid -> hostObject
     connections: new Map(), // slug -> connObject
-    responses: []
+    responses: [],
+    visitorLogs: []
 };
 
 // Unified Data Access Helpers
@@ -359,6 +360,72 @@ app.post('/api/history/favorite', async (req, res) => {
         data: { isFavorite }
     });
     res.json({ success: true });
+});
+
+// Analytics - Track a view
+app.post('/api/analytics/track', async (req, res) => {
+    try {
+        const { slug, locationData } = req.body;
+        if (!slug) return res.status(400).json({ error: 'Slug required' });
+
+        const conn = await getConnection(slug);
+        if (!conn) return res.status(404).json({ error: 'Connection not found' });
+
+        const logData = {
+            connectionId: conn.id,
+            ip: locationData.query,
+            city: locationData.city,
+            region: locationData.region,
+            regionName: locationData.regionName,
+            country: locationData.country,
+            countryCode: locationData.countryCode,
+            isp: locationData.isp,
+            org: locationData.org,
+            as: locationData.as,
+            zip: locationData.zip,
+            lat: locationData.lat,
+            lon: locationData.lon,
+            timezone: locationData.timezone
+        };
+
+        try {
+            await prisma.visitorLog.create({ data: logData });
+        } catch (dbErr) {
+            console.warn('[DB] Fallback to memory for visitor log');
+            memoryStore.visitorLogs.push({ ...logData, id: uuidv4(), createdAt: new Date() });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[API] Analytics track error:', err);
+        res.status(500).json({ error: 'System Error', details: err.message });
+    }
+});
+
+// Analytics - Get logs for a connection
+app.get('/api/analytics/:slug', async (req, res) => {
+    try {
+        const { slug } = req.params;
+        const conn = await getConnection(slug);
+        if (!conn) return res.status(404).json({ error: 'Connection not found' });
+
+        let logs = [];
+        try {
+            logs = await prisma.visitorLog.findMany({
+                where: { connectionId: conn.id },
+                orderBy: { createdAt: 'desc' }
+            });
+        } catch (dbErr) {
+            logs = memoryStore.visitorLogs
+                .filter(l => l.connectionId === conn.id)
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+
+        res.json(logs);
+    } catch (err) {
+        console.error('[API] Analytics fetch error:', err);
+        res.status(500).json({ error: 'System Error', details: err.message });
+    }
 });
 
 // Socket.io Logic
