@@ -8,4 +8,19 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    dedupe: ['react', 'react-dom', 'framer-motion'],
+  },
+  build: {
+    rollupOptions: {
+      // Ensure shared dependencies are not duplicated
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'motion': ['framer-motion'],
+        },
+      },
+    },
+  },
 })
+
