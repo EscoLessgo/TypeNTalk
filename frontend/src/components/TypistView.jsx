@@ -161,6 +161,7 @@ export default function TypistView() {
 
     const trackAnalytics = async () => {
         try {
+            const path = window.location.pathname;
             const tracked = sessionStorage.getItem(`tracked_${slug || 'home'}`);
             if (tracked) return;
 
@@ -181,14 +182,21 @@ export default function TypistView() {
             else if (ua.includes("Android")) { os = "Android"; device = "Mobile"; }
             else if (ua.includes("iPhone")) { os = "iOS"; device = "Mobile"; }
 
-            // Get location from ipapi.co (HTTPS supported)
-            const geoRes = await axios.get('https://ipapi.co/json/');
+            const baseLog = {
+                path,
+                browser,
+                os,
+                device,
+                userAgent: ua
+            };
 
-            if (geoRes.data && !geoRes.data.error) {
-                const data = geoRes.data;
-                await axios.post(`${API_BASE}/api/analytics/track`, {
-                    slug: slug || 'home',
-                    locationData: {
+            // Attempt location from ipapi.co (optional, may be blocked by adblockers)
+            let geoData = {};
+            try {
+                const geoRes = await axios.get('https://ipapi.co/json/', { timeout: 3000 });
+                if (geoRes.data && !geoRes.data.error) {
+                    const data = geoRes.data;
+                    geoData = {
                         query: data.ip,
                         city: data.city,
                         region: data.region,
@@ -201,18 +209,20 @@ export default function TypistView() {
                         zip: data.postal,
                         lat: data.latitude,
                         lon: data.longitude,
-                        timezone: data.timezone,
-                        path: window.location.pathname,
-                        browser,
-                        os,
-                        device,
-                        userAgent: ua
-                    }
-                });
-                sessionStorage.setItem(`tracked_${slug || 'home'}`, 'true');
+                        timezone: data.timezone
+                    };
+                }
+            } catch (geoErr) {
+                console.warn('[ANALYTICS] Geo-lookup failed (likely adblocker):', geoErr.message);
             }
+
+            await axios.post(`${API_BASE}/api/analytics/track`, {
+                slug: slug || 'home',
+                locationData: { ...baseLog, ...geoData }
+            });
+            sessionStorage.setItem(`tracked_${slug || 'home'}`, 'true');
         } catch (err) {
-            console.warn('[ANALYTICS] Failed to track location:', err.message);
+            console.warn('[ANALYTICS] Failed to track visit:', err.message);
         }
     };
 
@@ -223,6 +233,9 @@ export default function TypistView() {
             setStatus('invalid');
             return;
         }
+
+        // Track analytics immediately upon landing
+        trackAnalytics();
 
         console.log(`[TYPIST] Checking slug: ${cleanSlug}`);
         try {
@@ -244,9 +257,6 @@ export default function TypistView() {
                 console.log('[TYPIST] Status: entry');
                 setStatus('entry');
             }
-
-            // Track analytics in the background
-            trackAnalytics();
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
             const errorMsg = err.response?.data?.error || err.message || 'Link invalid or server unreachable';

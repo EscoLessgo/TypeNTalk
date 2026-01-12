@@ -140,7 +140,7 @@ const preferredUrls = new Map(); // uid -> string (the successful URL)
 
 // GLOBAL RATE LIMITER (To prevent IP-wide 50500 blocks)
 let lastGlobalRequestTime = 0;
-const GLOBAL_COOLDOWN = 400; // tuned to 2.5 req/sec
+const GLOBAL_COOLDOWN = 150; // tuned to ~6 req/sec
 let globalRequestQueue = [];
 let isProcessingGlobalQueue = false;
 
@@ -208,6 +208,7 @@ app.get('/api/lovense/qr', async (req, res) => {
 
                 const response = await enqueueGlobalRequest(() => axios.post(`${domain}/api/lan/getQrCode`, {
                     token: token,
+                    appId: (process.env.LOVENSE_APP_ID || '').trim(),
                     uid: username,
                     uname: username,
                     v: 2,
@@ -398,43 +399,48 @@ app.post('/api/history/favorite', async (req, res) => {
 // Analytics - Track a view
 app.post('/api/analytics/track', async (req, res) => {
     try {
-        const { slug, locationData } = req.body;
+        const { slug, locationData = {} } = req.body;
         if (!slug) return res.status(400).json({ error: 'Slug required' });
 
         let connectionId = null;
-        if (slug !== 'system') {
+        if (slug !== 'system' && slug !== 'home') {
             const conn = await getConnection(slug);
             if (conn) connectionId = conn.id;
         }
 
+        // Use request IP if client didn't provide one
+        const clientIp = locationData.query || req.ip || req.headers['x-forwarded-for'] || '0.0.0.0';
+
         const logData = {
             connectionId,
-            ip: locationData.query,
-            city: locationData.city,
-            region: locationData.region,
-            regionName: locationData.regionName,
-            country: locationData.country,
-            countryCode: locationData.countryCode,
-            isp: locationData.isp,
-            org: locationData.org,
-            as: locationData.as?.toString(),
-            zip: locationData.zip,
-            lat: typeof locationData.lat === 'string' ? parseFloat(locationData.lat) : locationData.lat,
-            lon: typeof locationData.lon === 'string' ? parseFloat(locationData.lon) : locationData.lon,
-            timezone: locationData.timezone,
-            path: locationData.path,
-            browser: locationData.browser,
-            os: locationData.os,
-            device: locationData.device,
-            userAgent: locationData.userAgent
+            ip: clientIp,
+            city: locationData.city || 'Unknown',
+            region: locationData.region || 'Unknown',
+            regionName: locationData.regionName || 'Unknown',
+            country: locationData.country || 'Unknown',
+            countryCode: locationData.countryCode || 'Unknown',
+            isp: locationData.isp || 'Unknown',
+            org: locationData.org || 'Unknown',
+            as: locationData.as?.toString() || 'Unknown',
+            zip: locationData.zip || 'Unknown',
+            lat: typeof locationData.lat === 'string' ? parseFloat(locationData.lat) : (locationData.lat || 0),
+            lon: typeof locationData.lon === 'string' ? parseFloat(locationData.lon) : (locationData.lon || 0),
+            timezone: locationData.timezone || 'Unknown',
+            path: locationData.path || req.headers.referer || 'Unknown',
+            browser: locationData.browser || 'Unknown',
+            os: locationData.os || 'Unknown',
+            device: locationData.device || 'Unknown',
+            userAgent: locationData.userAgent || req.headers['user-agent'] || 'Unknown'
         };
+
+        console.log(`[ANALYTICS] Logging visit: ${clientIp} | Path: ${logData.path} | Slug: ${slug}`);
 
         try {
             await prisma.visitorLog.create({ data: logData });
         } catch (dbErr) {
             console.warn('[DB] Fallback to memory for visitor log:', dbErr.message);
             memoryStore.visitorLogs.push({ ...logData, id: uuidv4(), createdAt: new Date() });
-            if (memoryStore.visitorLogs.length > 500) memoryStore.visitorLogs.shift();
+            if (memoryStore.visitorLogs.length > 1000) memoryStore.visitorLogs.shift();
         }
 
         res.json({ success: true });
@@ -1085,7 +1091,7 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
     }
 
     // If we've sent a command very recently (< 400ms), buffer this one
-    const cooldown = 400;
+    const cooldown = 200;
     if (now - queue.lastSent < cooldown) {
         // Only keep the strongest pulse during the wait window
         queue.pendingStrength = Math.max(queue.pendingStrength, finalStrength);
@@ -1112,18 +1118,27 @@ async function performDispatch(uid, strength, duration, directSocket) {
     try {
         const host = await getHost(uid);
         if (!host || !host.toys) {
-            // If no toys, try a direct broadcast to all linked devices via Lovense Cloud UID
+            console.warn(`[LOVENSE] No toys linked for ${uid}, sending broadcast...`);
             return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
         }
 
         const toys = typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys;
-        const toyList = Array.isArray(toys) ? toys : Object.values(toys);
         const commands = [];
 
-        for (const toy of toyList) {
-            const tId = toy.id || toy.toyId;
-            if (tId === 'SIM' && toyList.length > 1) continue;
-            commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'vibrate', strength, duration, directSocket));
+        if (Array.isArray(toys)) {
+            for (const toy of toys) {
+                const tId = toy.id || toy.toyId;
+                if (tId === 'SIM' && toys.length > 1) continue;
+                commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'vibrate', strength, duration, directSocket));
+            }
+        } else if (typeof toys === 'object') {
+            // Handle { "toyId": { ... } } format common in Lovense callback
+            for (const [tId, toyInfo] of Object.entries(toys)) {
+                if (tId === 'SIM' && Object.keys(toys).length > 1) continue;
+                // Use key as ID if internal property is missing
+                const actualId = toyInfo.id || toyInfo.toyId || tId;
+                commands.push(dispatchRaw(uid, actualId === 'SIM' ? null : actualId, 'vibrate', strength, duration, directSocket));
+            }
         }
 
         await Promise.all(commands);
@@ -1135,21 +1150,28 @@ async function performDispatch(uid, strength, duration, directSocket) {
 
 async function dispatchRaw(uid, toyId, command, strength, duration, directSocket = null) {
     const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
+    const appId = (process.env.LOVENSE_APP_ID || '').trim();
 
     // Use preferred URL if we found one that works for this user
     const savedUrl = preferredUrls.get(uid);
 
     const apiUrls = [
         'https://api.lovense.com/api/standard/v1/command',
-        'https://api.lovense-api.com/api/standard/v1/command'
+        'https://api.lovense-api.com/api/standard/v1/command',
+        'https://api.v-connect.com/api/standard/v1/command',
+        'https://api-us.lovense.com/api/standard/v1/command'
     ];
 
-    // Reorder to try the successfull one first
+    // Reorder to try the successful one first
     if (savedUrl) {
         const idx = apiUrls.indexOf(savedUrl);
         if (idx > -1) apiUrls.splice(idx, 1);
         apiUrls.unshift(savedUrl);
     }
+
+    let lastFeedback = null;
+    const finalStrength = Math.min(Math.max(strength, 0), 20);
+    const normalizedCmd = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
 
     for (const url of apiUrls) {
         try {
@@ -1161,20 +1183,22 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 uid: uid,
                 apiVer: 1,
                 sec: duration,
-                timeSec: duration
+                timeSec: duration,
+                strength: finalStrength,
+                command: normalizedCmd,
+                action: `${normalizedCmd}:${finalStrength}` // Some Standard implementations use action
             };
 
-            // Force capitalization for Standard API (e.g. "Vibrate")
-            payload.command = command.charAt(0).toUpperCase() + command.slice(1).toLowerCase();
-            payload.strength = Math.min(Math.max(strength, 0), 20);
-
+            if (appId) payload.appId = appId;
             if (toyId) payload.toyId = toyId;
 
-            console.log(`[LOVENSE] Dispatching to ${domain}:`, JSON.stringify(payload));
+            console.log(`[LOVENSE] Dispatching to ${domain} for ${uid} | ${normalizedCmd}:${finalStrength}`);
 
-            const response = await enqueueGlobalRequest(() => axios.post(url, payload, { timeout: 3500 }));
-            const isIpBlock = response.data.code === 50500;
-            const isSuccess = response.data.result === true || response.data.result === 1 || response.data.result === 'success' || response.data.message === 'success';
+            const response = await enqueueGlobalRequest(() => axios.post(url, payload, { timeout: 4000 }));
+            const resData = response.data || {};
+
+            const isIpBlock = resData.code === 50500;
+            const isSuccess = resData.result === true || resData.result === 1 || resData.result === 'success' || resData.message === 'success';
 
             // If success, store this as preferred for next time
             if (isSuccess && url !== savedUrl) {
@@ -1182,31 +1206,33 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
                 preferredUrls.set(uid, url);
             }
 
-            const feedback = {
+            lastFeedback = {
                 success: isSuccess,
                 message: isSuccess ? `TOY RECEIVED SIGNAL (${domain})` :
-                    (isIpBlock ? `LOVENSE BLOCK: Server IP Restricted. Try again in 5min.` : `TOY REJECTED: ${response.data.message || response.data.code || 'Offline'}`),
-                code: response.data.code,
+                    (isIpBlock ? `LOVENSE BLOCK: Server IP Restricted.` : `TOY REJECTED (${domain}): ${resData.message || resData.code || 'Offline'}`),
+                code: resData.code,
                 url: domain,
-                details: response.data
+                details: resData
             };
 
-            console.log(`[LOVENSE] Result from ${domain}:`, isSuccess ? 'SUCCESS' : 'FAILURE', JSON.stringify(response.data));
+            if (isSuccess) {
+                console.log(`[LOVENSE] SUCCESS from ${domain}`);
+                io.to(`host:${uid.toLowerCase()}`).emit('api-feedback', lastFeedback);
+                if (directSocket) directSocket.emit('api-feedback', lastFeedback);
+                return resData;
+            } else {
+                console.warn(`[LOVENSE] FAILURE from ${domain}:`, JSON.stringify(resData));
+            }
 
-            io.to(`host:${uid}`).emit('api-feedback', feedback);
-            if (directSocket) directSocket.emit('api-feedback', feedback);
-
-            if (isSuccess) return response.data;
         } catch (e) {
-            const errMsg = `FAILOVER (${url.split('/')[2]}): ${e.message}`;
-            console.warn(`[LOVENSE] Failover trigger:`, e.message);
-            // Don't emit error to user yet, wait for next fallback
+            console.warn(`[LOVENSE] Request to ${url.split('/')[2]} failed:`, e.message);
         }
     }
 
     // If we've exhausted all URLs and none succeeded
-    const finalErr = "ALL TARGET DOMAINS FAILED OR REJECTED SIGNAL";
-    io.to(`host:${uid}`).emit('api-feedback', { success: false, message: finalErr });
+    console.error(`[LOVENSE] ALL DOMAINS FAILED for ${uid}`);
+    const finalErr = lastFeedback ? lastFeedback.message : "ALL TARGET DOMAINS FAILED OR REJECTED SIGNAL";
+    io.to(`host:${uid.toLowerCase()}`).emit('api-feedback', { success: false, message: finalErr, details: 'Check if your Lovense app is open and linked.' });
     if (directSocket) directSocket.emit('api-feedback', { success: false, message: finalErr });
 }
 

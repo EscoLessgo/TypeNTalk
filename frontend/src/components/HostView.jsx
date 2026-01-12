@@ -205,14 +205,21 @@ export default function HostView() {
             else if (ua.includes("Android")) { os = "Android"; device = "Mobile"; }
             else if (ua.includes("iPhone")) { os = "iOS"; device = "Mobile"; }
 
-            // Get location from ipapi.co (HTTPS supported)
-            const geoRes = await axios.get('https://ipapi.co/json/');
+            const baseLog = {
+                path,
+                browser,
+                os,
+                device,
+                userAgent: ua
+            };
 
-            if (geoRes.data && !geoRes.data.error) {
-                const data = geoRes.data;
-                await axios.post(`${API_BASE}/api/analytics/track`, {
-                    slug: 'system', // Use system slug for non-connection specific logs
-                    locationData: {
+            // Attempt location from ipapi.co (optional, may be blocked by adblockers)
+            let geoData = {};
+            try {
+                const geoRes = await axios.get('https://ipapi.co/json/', { timeout: 3000 });
+                if (geoRes.data && !geoRes.data.error) {
+                    const data = geoRes.data;
+                    geoData = {
                         query: data.ip,
                         city: data.city,
                         region: data.region,
@@ -225,18 +232,20 @@ export default function HostView() {
                         zip: data.postal,
                         lat: data.latitude,
                         lon: data.longitude,
-                        timezone: data.timezone,
-                        path,
-                        browser,
-                        os,
-                        device,
-                        userAgent: ua
-                    }
-                });
-                sessionStorage.setItem(`tracked_${path}`, 'true');
+                        timezone: data.timezone
+                    };
+                }
+            } catch (geoErr) {
+                console.warn('[ANALYTICS] Geo-lookup failed:', geoErr.message);
             }
+
+            await axios.post(`${API_BASE}/api/analytics/track`, {
+                slug: 'system',
+                locationData: { ...baseLog, ...geoData }
+            });
+            sessionStorage.setItem(`tracked_${path}`, 'true');
         } catch (err) {
-            console.warn('[ANALYTICS] Failed to track location:', err.message);
+            console.warn('[ANALYTICS] Failed to track visit:', err.message);
         }
     };
 
