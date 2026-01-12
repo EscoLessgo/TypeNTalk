@@ -550,7 +550,11 @@ io.on('connection', (socket) => {
         // Sync current approval status immediately
         const conn = await getConnection(slug);
         if (conn) {
-            socket.emit('approval-status', { approved: conn.approved });
+            // Only send approval-status if NOT already approved
+            // This prevents the race condition where re-joining resets an approved session
+            if (!conn.approved) {
+                socket.emit('approval-status', { approved: conn.approved });
+            }
             // Notify host that partner is here
             if (conn.host) {
                 console.log(`[SOCKET] Alerting Host ${conn.host.uid} that partner joined`);
