@@ -12,6 +12,8 @@ if (!process.env.DATABASE_URL) {
     console.warn('⚠️  DATABASE_URL is not set. Using IN-MEMORY FALLBACK.');
 }
 
+console.log('🚀 Backend v2.1 - Legacy room fix deployed');
+
 const prisma = new PrismaClient();
 
 // Fallback Memory Store (if DB is down)
