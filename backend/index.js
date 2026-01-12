@@ -545,6 +545,23 @@ app.get('/api/admin/overwatch', async (req, res) => {
     }
 });
 
+// Admin - Purge All Analytics Logs
+app.delete('/api/admin/logs/purge', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        try {
+            await prisma.visitorLog.deleteMany({});
+        } catch (e) {
+            memoryStore.visitorLogs = [];
+        }
+        res.json({ success: true, message: 'All logs purged' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Admin - All Connections
 app.get('/api/admin/connections', async (req, res) => {
     const password = req.headers['x-admin-password'];

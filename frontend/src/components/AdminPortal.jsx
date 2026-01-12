@@ -108,6 +108,22 @@ export default function AdminPortal() {
         }
     };
 
+    const purgeLogs = async () => {
+        if (!window.confirm('CRITICAL ACTION: You are about to purge ALL global visitor logs. This cannot be undone. Proceed?')) return;
+        if (!window.confirm('FINAL CONFIRMATION: Verify you want to wipe the entire tracking database?')) return;
+
+        try {
+            await axios.delete(`${API_BASE}/api/admin/logs/purge`, {
+                headers: { 'x-admin-password': 'tntadmin2026' }
+            });
+            setRecentLogs([]);
+            fetchData(); // Refresh summary stats
+        } catch (err) {
+            console.error('Purge logs error:', err);
+            alert('Failed to purge logs');
+        }
+    };
+
     const fetchConnAnalytics = async (conn) => {
         setSelectedConn(conn);
         setIsFetchingAnalytics(true);
@@ -471,6 +487,12 @@ export default function AdminPortal() {
                         <Activity className="text-purple-400" size={18} />
                         <h3 className="text-sm font-black uppercase tracking-[0.3em] text-white italic">Recent Network Activity</h3>
                     </div>
+                    <button
+                        onClick={purgeLogs}
+                        className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 group"
+                    >
+                        <X size={14} className="group-hover:rotate-90 transition-transform" /> Purge Analytics
+                    </button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
