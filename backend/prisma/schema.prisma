@@ -14,9 +14,24 @@ model Host {
   id          String   @id @default(uuid())
   uid         String   @unique // Lovense User ID
   username    String
+  email       String?  @unique
+  googleId    String?  @unique
+  avatar      String?
+  vanitySlug  String?  @unique
+  settings    String?  @default("{}") // JSON for intensityCeiling, syncMode, etc.
   toys        String?  // Store current toy info (JSON string)
   connections Connection[]
+  blacklist   Blacklist[]
   createdAt   DateTime @default(now())
+}
+
+model Blacklist {
+  id        String   @id @default(uuid())
+  hostId    String
+  host      Host     @relation(fields: [hostId], references: [id])
+  ip        String
+  reason    String?
+  createdAt DateTime @default(now())
 }
 
 model Connection {

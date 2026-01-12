@@ -124,6 +124,36 @@ export default function AdminPortal() {
         }
     };
 
+    const purgeConnections = async () => {
+        if (!window.confirm('DANGER: You are about to terminate ALL active sessions across the entire system. All users will be disconnected. Proceed?')) return;
+
+        try {
+            await axios.delete(`${API_BASE}/api/admin/connections/purge/all`, {
+                headers: { 'x-admin-password': 'tntadmin2026' }
+            });
+            setConnections([]);
+            alert('All sessions purged successfully.');
+        } catch (err) {
+            console.error('Purge connections error:', err);
+            alert('Failed to purge connections');
+        }
+    };
+
+    const purgeDeadSessions = async () => {
+        if (!window.confirm('You are about to purge all sessions that have 0 activity and are older than 15 minutes. Proceed?')) return;
+
+        try {
+            const res = await axios.delete(`${API_BASE}/api/admin/connections/purge/dead`, {
+                headers: { 'x-admin-password': 'tntadmin2026' }
+            });
+            alert(`Purged ${res.data.count || 0} dead sessions.`);
+            fetchData();
+        } catch (err) {
+            console.error('Purge dead sessions error:', err);
+            alert('Failed to purge dead sessions');
+        }
+    };
+
     const fetchConnAnalytics = async (conn) => {
         setSelectedConn(conn);
         setIsFetchingAnalytics(true);
@@ -536,7 +566,23 @@ export default function AdminPortal() {
                     <h3 className="text-xl font-black italic uppercase text-white tracking-widest flex items-center gap-3 text-gradient">
                         <Database size={24} className="text-purple-400" /> Active Session Registry
                     </h3>
-                    <div className="flex-1 max-w-md mx-8">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={purgeDeadSessions}
+                            className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/20 hover:border-yellow-500/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                            Clean Dead Sessions
+                        </button>
+                        <button
+                            onClick={purgeConnections}
+                            className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                            Purge All Sessions
+                        </button>
+                    </div>
+                </div>
+                <div className="flex items-center justify-between">
+                    <div className="flex-1 max-w-md">
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
                             <input

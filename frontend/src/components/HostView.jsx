@@ -5,6 +5,7 @@ import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, 
 import TypistAvatar from './ui/TypistAvatar';
 import PulseParticles from './ui/PulseParticles';
 import SessionHeatmap from './ui/SessionHeatmap';
+import { GoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getApiBase = () => {
@@ -45,6 +46,9 @@ export default function HostView() {
     const [latency, setLatency] = useState(0);
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('sync_user') || 'null'));
+    const [hostProfile, setHostProfile] = useState(null);
+    const [showProfile, setShowProfile] = useState(false);
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -140,6 +144,16 @@ export default function HostView() {
             const msg = data.active ? "⚠️ OVERDRIVE ENGAGED: 100% POWER!" : "Overdrive Disengaged.";
             setNotifications(prev => [{ id, type: 'overdrive', msg, icon: 'zap' }, ...prev].slice(0, 3));
             setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
+        });
+
+        socket.on('session-terminated', (data = {}) => {
+            console.log('[SOCKET] Session terminated by system');
+            const id = Date.now();
+            setNotifications(prev => [{ id, type: 'alert', msg: data.message || "Session terminated by administrator.", icon: 'shield' }, ...prev].slice(0, 3));
+            setStatus('setup');
+            setSlug('');
+            setQrCode('');
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 8000);
         });
 
         socket.on('new-message', (data = {}) => {

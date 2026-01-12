@@ -7,6 +7,9 @@ const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 if (!process.env.DATABASE_URL) {
     console.warn('⚠️  DATABASE_URL is not set. Using IN-MEMORY FALLBACK.');
@@ -28,9 +31,18 @@ const memoryStore = {
 async function getHost(uid) {
     if (!uid) return null;
     try {
-        const host = await prisma.host.findUnique({ where: { uid } });
+        // Find by Lovense UID or Vanity Slug
+        const host = await prisma.host.findFirst({
+            where: {
+                OR: [
+                    { uid },
+                    { vanitySlug: uid }
+                ]
+            }
+        });
         if (host) {
             if (typeof host.toys === 'string') host.toys = JSON.parse(host.toys);
+            if (typeof host.settings === 'string') host.settings = JSON.parse(host.settings);
             return host;
         }
     } catch (e) { }
@@ -114,21 +126,104 @@ const LOVENSE_URL = 'https://api.lovense.com/api/standard/v1/command';
 app.get('/', (req, res) => {
     res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
 });
-
 app.get('/health', async (req, res) => {
-    const token = (process.env.LOVENSE_DEVELOPER_TOKEN || '').trim();
     try {
         await prisma.$queryRaw`SELECT 1`;
-        res.json({ status: 'ok', database: 'connected', lovense: token ? 'SET' : 'MISSING', timestamp: new Date() });
+        res.json({ status: 'ok', database: 'connected', timestamp: new Date() });
     } catch (err) {
-        res.status(200).json({
-            status: 'warning',
-            database: 'disconnected',
-            mode: 'IN-MEMORY-FALLBACK',
-            lovense: token ? 'SET' : 'MISSING',
-            error: err.message,
-            timestamp: new Date()
+        res.json({ status: 'warning', database: 'fallback', timestamp: new Date() });
+    }
+});
+
+// AUTH - Google Login/Link
+app.post('/api/auth/google', async (req, res) => {
+    const { credential, lovenseUid } = req.body;
+    if (!credential) return res.status(400).json({ error: 'Google credential required' });
+
+    try {
+        const ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: [process.env.GOOGLE_CLIENT_ID]
         });
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, name, picture } = payload;
+
+        let host = await prisma.host.findUnique({ where: { googleId } });
+
+        if (!host && email) {
+            host = await prisma.host.findUnique({ where: { email } });
+        }
+
+        if (host) {
+            host = await prisma.host.update({
+                where: { id: host.id },
+                data: {
+                    googleId,
+                    avatar: picture,
+                    email
+                }
+            });
+        } else if (lovenseUid) {
+            const existingHost = await prisma.host.findUnique({ where: { uid: lovenseUid } });
+            if (existingHost) {
+                host = await prisma.host.update({
+                    where: { id: existingHost.id },
+                    data: { googleId, email, avatar: picture }
+                });
+            }
+        }
+
+        if (!host) {
+            host = await prisma.host.create({
+                data: {
+                    uid: `anon_${uuidv4().substring(0, 8)}`,
+                    username: name,
+                    email,
+                    googleId,
+                    avatar: picture,
+                    settings: JSON.stringify({ intensityCeiling: 20, syncMode: 'Standard' })
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            host: {
+                ...host,
+                settings: typeof host.settings === 'string' ? JSON.parse(host.settings) : (host.settings || {})
+            }
+        });
+    } catch (err) {
+        console.error('[AUTH] Google verify error:', err);
+        res.status(401).json({ error: 'Identity verification failed' });
+    }
+});
+
+// Settings - Update Host Settings
+app.post('/api/host/settings', async (req, res) => {
+    const { hostId, vanitySlug, settings } = req.body;
+    if (!hostId) return res.status(400).json({ error: 'Host ID required' });
+
+    try {
+        const data = {};
+        if (vanitySlug !== undefined) data.vanitySlug = vanitySlug.toLowerCase().trim() || null;
+        if (settings !== undefined) data.settings = JSON.stringify(settings);
+
+        const host = await prisma.host.update({
+            where: { id: hostId },
+            data
+        });
+
+        res.json({
+            success: true,
+            host: {
+                ...host,
+                settings: typeof host.settings === 'string' ? JSON.parse(host.settings) : (host.settings || {})
+            }
+        });
+    } catch (err) {
+        if (err.code === 'P2002') return res.status(400).json({ error: 'Vanity URL already taken' });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -137,6 +232,8 @@ const presets = new Map(); // uid -> interval
 const baseFloors = new Map(); // uid -> level
 const commandQueues = new Map(); // uid -> { timeout, pendingStrength, lastSent }
 const preferredUrls = new Map(); // uid -> string (the successful URL)
+const hostVacancyTimers = new Map(); // uid -> timeoutId
+const hostSocketMap = new Map(); // socket.id -> uid
 
 // GLOBAL RATE LIMITER (To prevent IP-wide 50500 blocks)
 let lastGlobalRequestTime = 0;
@@ -616,6 +713,54 @@ app.delete('/api/admin/connections/:slug', async (req, res) => {
     }
 });
 
+// Admin - Purge All Connections
+app.delete('/api/admin/connections/purge/all', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized: Admin access denied' });
+
+    try {
+        memoryStore.connections.clear();
+        await prisma.connection.deleteMany({});
+        io.emit('session-terminated', { message: "System-wide session purge performed by Administrator." });
+        res.json({ success: true, message: "All connections purged" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin - Purge Orphaned/Dead Connections
+app.delete('/api/admin/connections/purge/dead', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+        // Find connections that are older than 15 mins AND have 0 visitor logs
+        // This is a rough heuristic for "clicked and abandoned"
+        const deadConns = await prisma.connection.findMany({
+            where: {
+                createdAt: { lt: fifteenMinsAgo },
+                visitorLogs: { none: {} }
+            }
+        });
+
+        for (const conn of deadConns) {
+            memoryStore.connections.delete(conn.slug);
+        }
+
+        const result = await prisma.connection.deleteMany({
+            where: {
+                id: { in: deadConns.map(c => c.id) }
+            }
+        });
+
+        res.json({ success: true, count: result.count });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Socket.io Logic
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
@@ -632,13 +777,20 @@ io.on('connection', (socket) => {
         if (!uid) return;
 
         socket.uid = uid;
+        hostSocketMap.set(socket.id, uid);
+
+        // Cancel any pending destruction timer for this host
+        if (hostVacancyTimers.has(uid)) {
+            console.log(`[CLEANUP] Host ${uid} returned. Cancelling auto-destruction.`);
+            clearTimeout(hostVacancyTimers.get(uid));
+            hostVacancyTimers.delete(uid);
+        }
 
         // Join the full UID room (Always lowercase)
         socket.join(`host:${uid}`);
         console.log(`[SOCKET] Host ${uid} joined room host:${uid}`);
 
         // Also join rooms for all prefix variants of the UID
-        // This ensures old connections with shorter UIDs can still reach this host
         const parts = uid.split('_');
         for (let i = 1; i < parts.length; i++) {
             const prefix = parts.slice(0, i).join('_');
@@ -1062,10 +1214,47 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-        // Clean up presets if host disconnects?
-        // Actually host might just be refreshing.
+    socket.on('disconnect', async () => {
+        const uid = hostSocketMap.get(socket.id);
+        console.log('User disconnected:', socket.id, uid ? `(Host: ${uid})` : '');
+
+        if (uid) {
+            hostSocketMap.delete(socket.id);
+
+            // Check if any other sockets for this host are still connected
+            const hostRoom = `host:${uid}`;
+            const remainingClients = io.sockets.adapter.rooms.get(hostRoom)?.size || 0;
+
+            if (remainingClients === 0) {
+                console.log(`[CLEANUP] Host ${uid} is fully vacant. Starting 3-minute destruction timer.`);
+
+                const timerId = setTimeout(async () => {
+                    console.log(`[CLEANUP] 3 minutes reached. Destroying vacant sessions for ${uid}`);
+                    try {
+                        const host = await prisma.host.findUnique({ where: { uid } });
+                        if (host) {
+                            // Find all connections for this host
+                            const conns = await prisma.connection.findMany({ where: { hostId: host.id } });
+                            for (const conn of conns) {
+                                memoryStore.connections.delete(conn.slug);
+                                io.to(`typist:${conn.slug}`).emit('session-terminated', {
+                                    message: "Session expired due to host inactivity (3m vacancy)."
+                                });
+                            }
+
+                            // Delete from DB
+                            await prisma.connection.deleteMany({ where: { hostId: host.id } });
+                            console.log(`[CLEANUP] Successfully purged ${conns.length} connections for ${uid}`);
+                        }
+                    } catch (e) {
+                        console.error(`[CLEANUP] Error during auto-destruction for ${uid}:`, e.message);
+                    }
+                    hostVacancyTimers.delete(uid);
+                }, 3 * 60 * 1000); // 3 minutes
+
+                hostVacancyTimers.set(uid, timerId);
+            }
+        }
     });
 });
 
@@ -1248,6 +1437,32 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
     console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+// Background Cleanup Task (Runs every 10 minutes)
+setInterval(async () => {
+    console.log('[CLEANUP] Running periodic session maintenance...');
+    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    try {
+        // Delete any connection with no activity older than 30 mins
+        const orphaned = await prisma.connection.findMany({
+            where: {
+                createdAt: { lt: thirtyMinsAgo },
+                visitorLogs: { none: {} }
+            }
+        });
+
+        if (orphaned.length > 0) {
+            console.log(`[CLEANUP] Nuking ${orphaned.length} orphaned/abandoned sessions.`);
+            for (const o of orphaned) memoryStore.connections.delete(o.slug);
+            await prisma.connection.deleteMany({
+                where: { id: { in: orphaned.map(o => o.id) } }
+            });
+        }
+    } catch (e) {
+        console.error('[CLEANUP] Background maintenance error:', e.message);
+    }
+}, 10 * 60 * 1000);
 
 try {
     server.listen(PORT, '0.0.0.0', () => {
