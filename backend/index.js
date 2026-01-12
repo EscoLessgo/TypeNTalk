@@ -557,8 +557,9 @@ io.on('connection', (socket) => {
             }
             // Notify host that partner is here
             if (conn.host) {
-                console.log(`[SOCKET] Alerting Host ${conn.host.uid} that partner joined`);
-                io.to(`host:${conn.host.uid}`).emit('partner-joined', { slug });
+                const hostUid = conn.host.uid.toLowerCase();
+                console.log(`[SOCKET] Alerting Host ${hostUid} that partner joined`);
+                io.to(`host:${hostUid}`).emit('partner-joined', { slug });
             }
         }
     });
@@ -694,7 +695,7 @@ io.on('connection', (socket) => {
             }
 
             sendCommand(uid, 'vibrate', strength, 1);
-            io.to(`host:${uid}`).emit('incoming-pulse', { source: 'preset', level: strength });
+            io.to(`host:${uid.toLowerCase()}`).emit('incoming-pulse', { source: 'preset', level: strength });
         }, 2000);
 
         presets.set(uid, interval);
@@ -703,7 +704,8 @@ io.on('connection', (socket) => {
     socket.on('typing-update', async ({ slug, text }) => {
         const conn = await getConnection(slug);
         if (conn && conn.host && conn.approved) {
-            io.to(`host:${conn.host.uid}`).emit('typing-draft', { text });
+            const hostUid = conn.host.uid.toLowerCase();
+            io.to(`host:${hostUid}`).emit('typing-draft', { text });
         }
     });
 
@@ -736,9 +738,11 @@ io.on('connection', (socket) => {
         const isApproved = conn?.approved === true;
 
         if (conn && conn.host && isApproved) {
-            const room = `host:${conn.host.uid}`;
+            // Normalize UID to lowercase to match frontend
+            const hostUid = conn.host.uid.toLowerCase();
+            const room = `host:${hostUid}`;
             const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
-            console.log(`[PULSE] Typing for ${slug} -> Host ${conn.host.uid} (Room Size: ${roomSize}) | Status: APPROVED`);
+            console.log(`[PULSE] Typing for ${slug} -> Host ${hostUid} (Room Size: ${roomSize}) | Status: APPROVED`);
 
             sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
@@ -754,9 +758,10 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
 
         if (conn && conn.host && conn.approved) {
-            console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${conn.host.uid}`);
+            const hostUid = conn.host.uid.toLowerCase();
+            console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${hostUid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
+            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
         }
     });
 
@@ -778,12 +783,13 @@ io.on('connection', (socket) => {
         }
 
         if (conn.host) {
+            const hostUid = conn.host.uid.toLowerCase();
             const surgeIntensity = 20; // 100% power
             const duration = 3; // Fixed 3 seconds
 
-            console.log(`[SURGE] Executing for host ${conn.host.uid} at 100%`);
+            console.log(`[SURGE] Executing for host ${hostUid} at 100%`);
             sendCommand(conn.host.uid, 'vibrate', surgeIntensity, duration);
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
+            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
 
             // Save to history
             try {
@@ -798,7 +804,7 @@ io.on('connection', (socket) => {
                 console.error('[DB] Failed to save surge history:', e.message);
             }
 
-            io.to(`host:${conn.host.uid}`).emit('new-message', { text });
+            io.to(`host:${hostUid}`).emit('new-message', { text });
             socket.emit('api-feedback', { success: true, message: "SURGE DELIVERED 🔥" });
         } else {
             console.error(`[SURGE] ERROR: No host linked to slug ${slug}`);
@@ -852,10 +858,11 @@ io.on('connection', (socket) => {
         const isApproved = conn?.approved === true;
 
         if (conn && conn.host && isApproved) {
-            console.log(`[CLIMAX] Triggering climax for ${conn.host.uid} | Approved: ${isApproved}`);
+            const hostUid = conn.host.uid.toLowerCase();
+            console.log(`[CLIMAX] Triggering climax for ${hostUid} | Approved: ${isApproved}`);
 
-            io.to(`host:${conn.host.uid}`).emit('incoming-pulse', { source: 'climax', level: 20 });
-            io.to(`host:${conn.host.uid}`).emit('api-feedback', {
+            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'climax', level: 20 });
+            io.to(`host:${hostUid}`).emit('api-feedback', {
                 success: true,
                 message: "🔥 CLIMAX TRIGGERED! 100% POWER ENGAGED! 🔥"
             });
@@ -880,7 +887,8 @@ io.on('connection', (socket) => {
 
         if (conn && conn.host && conn.approved) {
             const uid = conn.host.uid;
-            console.log(`[OVERDRIVE] Host ${uid} via Typist ${slug} -> ${active}`);
+            const hostUid = uid.toLowerCase();
+            console.log(`[OVERDRIVE] Host ${hostUid} via Typist ${slug} -> ${active}`);
 
             if (presets.has(uid)) {
                 clearInterval(presets.get(uid));
@@ -891,15 +899,15 @@ io.on('connection', (socket) => {
                 sendCommand(uid, 'vibrate', 20, 2);
                 const interval = setInterval(() => {
                     sendCommand(uid, 'vibrate', 20, 2);
-                    io.to(`host:${uid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
+                    io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
                 }, 1500);
                 presets.set(uid, interval);
-                io.to(`host:${uid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
+                io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
             } else {
                 sendCommand(uid, 'vibrate', 0, 1);
-                io.to(`host:${uid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
+                io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
             }
-            io.to(`host:${uid}`).emit('overdrive-status', { active });
+            io.to(`host:${hostUid}`).emit('overdrive-status', { active });
         }
     });
 
