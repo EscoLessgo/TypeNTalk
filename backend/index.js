@@ -602,17 +602,52 @@ io.on('connection', (socket) => {
     socket.on('approve-typist', async ({ slug, approved }) => {
         console.log(`[APPROVAL-COMMIT] Status -> ${approved ? 'TRUE' : 'FALSE'} for Slug=${slug} (Requested by Socket: ${socket.id})`);
 
+        // Get the approving host's current UID from the socket
+        const approverUid = socket.uid;
+        console.log(`[APPROVAL] Approver UID from socket: ${approverUid}`);
+
         try {
-            await prisma.connection.update({
-                where: { slug },
-                data: { approved }
-            });
-            console.log(`[DB] Approval updated for ${slug}`);
+            // First, ensure we have the current host record
+            if (approved && approverUid) {
+                // Upsert the host with current UID
+                const currentHost = await prisma.host.upsert({
+                    where: { uid: approverUid },
+                    update: { username: approverUid },
+                    create: { uid: approverUid, username: approverUid }
+                });
+
+                // Update the connection to point to this current host
+                await prisma.connection.update({
+                    where: { slug },
+                    data: {
+                        approved: true,
+                        hostId: currentHost.id
+                    }
+                });
+                console.log(`[DB] Connection ${slug} updated: approved=true, hostId=${currentHost.id} (UID: ${approverUid})`);
+
+                // Also update memory
+                const memConn = memoryStore.connections.get(slug);
+                if (memConn) {
+                    memConn.approved = true;
+                    memConn.hostId = currentHost.id;
+                    memConn.hostUid = approverUid;
+                }
+            } else {
+                await prisma.connection.update({
+                    where: { slug },
+                    data: { approved }
+                });
+                console.log(`[DB] Approval updated for ${slug}`);
+            }
         } catch (e) {
             console.error(`[DB-ERROR] Failed to update approval for ${slug}: ${e.message}`);
             const memConn = memoryStore.connections.get(slug);
             if (memConn) {
                 memConn.approved = approved;
+                if (approved && approverUid) {
+                    memConn.hostUid = approverUid;
+                }
                 console.log(`[MEMORY] Approval updated for ${slug}`);
             } else {
                 console.warn(`[WARNING] No memory connection found for ${slug} to update approval.`);
