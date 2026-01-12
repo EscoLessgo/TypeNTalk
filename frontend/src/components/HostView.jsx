@@ -226,10 +226,13 @@ export default function HostView() {
     }, [isSocketConnected, status]);
 
     useEffect(() => {
-        if (slug && status === 'setup' && !isLoading) {
+        // Only auto-skip to connected if we have a slug AND toys are linked
+        // This prevents bypassing the QR verification flow
+        if (slug && status === 'setup' && !isLoading && Object.keys(toys).length > 0) {
+            console.log('[SESSION] Auto-restoring to connected state (slug + toys present)');
             setStatus('connected');
         }
-    }, [slug, status, isLoading]);
+    }, [slug, status, isLoading, toys]);
 
     useEffect(() => {
         slugRef.current = slug;
