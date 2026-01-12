@@ -826,9 +826,12 @@ io.on('connection', (socket) => {
 
         if (conn && conn.host && conn.approved) {
             const hostUid = conn.host.uid.toLowerCase();
+            const room = `host:${hostUid}`;
             console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${hostUid}`);
             sendCommand(conn.host.uid, 'vibrate', intensity, 1);
-            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'voice', level: intensity });
+
+            // Send visual feedback to host
+            io.to(room).emit('incoming-pulse', { source: 'voice', level: intensity });
         }
     });
 
