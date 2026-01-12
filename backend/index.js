@@ -734,7 +734,15 @@ io.on('connection', (socket) => {
 
     // Real-time pulse from typing
     socket.on('typing-pulse', async ({ slug, intensity }) => {
+        console.log(`[PULSE-DEBUG] Received typing-pulse: slug=${slug}, intensity=${intensity}`);
+
         const conn = await getConnection(slug);
+        console.log(`[PULSE-DEBUG] Connection found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${conn?.approved}`);
+
+        if (conn && conn.host) {
+            console.log(`[PULSE-DEBUG] Host UID from DB: "${conn.host.uid}"`);
+        }
+
         const isApproved = conn?.approved === true;
 
         if (conn && conn.host && isApproved) {
@@ -747,9 +755,7 @@ io.on('connection', (socket) => {
             sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
-            if (intensity > 2) {
-                console.warn(`[BLOCK] Illegal Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
-            }
+            console.warn(`[BLOCK] Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
         }
     });
 
