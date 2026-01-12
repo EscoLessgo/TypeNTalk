@@ -6,8 +6,26 @@ import {
     Filter, RefreshCw, BarChart3, Clock, Eye, Target, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default Leaflet icon paths in Vite
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Helper to handle Leaflet size calculation bugs in React
+function MapResizer() {
+    const map = useMap();
+    useEffect(() => {
+        setTimeout(() => map.invalidateSize(), 500);
+    }, [map]);
+    return null;
+}
 
 const getApiBase = () => {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
@@ -290,24 +308,30 @@ export default function AdminPortal() {
                             </div>
                         </div>
 
-                        <div className="flex-1 relative rounded-2xl border border-white/10 overflow-hidden shadow-2xl min-h-[350px]">
+                        <div className="flex-1 relative rounded-2xl border border-white/10 overflow-hidden shadow-2xl" style={{ minHeight: '400px' }}>
                             <MapContainer
-                                center={[20, 0]}
+                                center={[25, 10]}
                                 zoom={2}
-                                scrollWheelZoom={false}
-                                className="h-full w-full bg-black/40"
-                                style={{ background: '#070708' }}
+                                scrollWheelZoom={true}
+                                className="absolute inset-0 w-full h-full"
+                                style={{ background: '#0b0b0d' }}
                                 zoomControl={false}
                                 attributionControl={false}
                             >
+                                <MapResizer />
                                 <TileLayer
-                                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                                    url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+                                    noWrap={true}
+                                />
+                                {/* Overlay labels layer for that Cloudflare look */}
+                                <TileLayer
+                                    url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+                                    opacity={0.6}
                                     noWrap={true}
                                 />
 
-                                {/* Render pings from summary data (aggregated) */}
+                                {/* Aggregated Hubs (Heatmap Rings) */}
                                 {Object.entries(summary?.countries || {}).map(([code, count]) => {
-                                    // Use first available log for lat/lon or fallback to central coords
                                     const sampleLog = recentLogs.find(l => l.countryCode === code && l.lat && l.lon);
                                     if (!sampleLog) return null;
 
@@ -315,40 +339,43 @@ export default function AdminPortal() {
                                         <CircleMarker
                                             key={code}
                                             center={[sampleLog.lat, sampleLog.lon]}
-                                            radius={Math.min(5 + count * 2, 25)}
+                                            radius={Math.min(8 + count * 2, 35)}
                                             pathOptions={{
-                                                fillColor: '#a855f7',
-                                                color: '#d946ef',
-                                                weight: 1,
-                                                opacity: 0.8,
-                                                fillOpacity: 0.4
+                                                fillColor: '#8b5cf6',
+                                                color: '#c084fc',
+                                                weight: 2,
+                                                opacity: 0.6,
+                                                fillOpacity: 0.3
                                             }}
                                         >
-                                            <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent={false}>
-                                                <div className="glass p-2 border-none shadow-none text-white">
-                                                    <div className="flex items-center gap-2">
-                                                        <span>{getFlagEmoji(code)}</span>
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">{sampleLog.country}</span>
+                                            <Tooltip direction="top" offset={[0, -10]} opacity={1}>
+                                                <div className="bg-black/90 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-2xl">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-lg">{getFlagEmoji(code)}</span>
+                                                        <span className="text-xs font-black uppercase tracking-widest text-white">{sampleLog.country}</span>
                                                     </div>
-                                                    <div className="text-[12px] font-black text-purple-400 mt-1">{count} Hits Captured</div>
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-xl font-black text-purple-400">{count}</span>
+                                                        <span className="text-[9px] font-bold text-white/40 uppercase">Global Hits</span>
+                                                    </div>
                                                 </div>
                                             </Tooltip>
                                         </CircleMarker>
                                     );
                                 })}
 
-                                {/* Individual Recent Pings */}
-                                {recentLogs.slice(0, 15).map((log, i) => (
+                                {/* Real-time Data Pulse Nodes */}
+                                {recentLogs.slice(0, 20).map((log, i) => (
                                     log.lat && log.lon && (
                                         <CircleMarker
-                                            key={`hit-${i}`}
+                                            key={`live-${i}`}
                                             center={[log.lat, log.lon]}
-                                            radius={2}
+                                            radius={3}
                                             pathOptions={{
                                                 fillColor: '#fff',
                                                 color: '#fff',
                                                 weight: 0,
-                                                fillOpacity: 0.8
+                                                fillOpacity: 0.9
                                             }}
                                             className="animate-pulse-map"
                                         />
@@ -356,16 +383,14 @@ export default function AdminPortal() {
                                 ))}
                             </MapContainer>
 
-                            <div className="absolute bottom-4 left-4 z-[1000] space-y-2">
-                                <div className="glass px-4 py-2 rounded-xl flex items-center gap-3 border-purple-500/20">
-                                    <div className="flex -space-x-2">
-                                        {Object.keys(summary?.countries || {}).slice(0, 3).map(c => (
-                                            <span key={c} className="text-sm">{getFlagEmoji(c)}</span>
-                                        ))}
+                            {/* Legend / Stats overlay */}
+                            <div className="absolute bottom-6 right-6 z-[1000]">
+                                <div className="glass px-5 py-3 rounded-2xl border-white/10 flex flex-col gap-1 shadow-2xl">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Surveillance</span>
                                     </div>
-                                    <span className="text-[9px] font-black text-white/60 uppercase tracking-widest">
-                                        Distributing across {Object.keys(summary?.countries || {}).length} nodes
-                                    </span>
+                                    <p className="text-[11px] font-bold text-white/40 uppercase">Syncing {recentLogs.length} Packets...</p>
                                 </div>
                             </div>
                         </div>
