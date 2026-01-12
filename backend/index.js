@@ -463,6 +463,9 @@ app.get('/api/analytics/:slug', async (req, res) => {
 
 // Admin - Summary Stats
 app.get('/api/admin/summary', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized: Admin access denied' });
+
     try {
         let hostCount = 0;
         let connCount = 0;
@@ -486,6 +489,9 @@ app.get('/api/admin/summary', async (req, res) => {
 
 // Admin - All Connections
 app.get('/api/admin/connections', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized: Admin access denied' });
+
     try {
         let connections = [];
         try {
@@ -516,6 +522,9 @@ app.get('/api/admin/connections', async (req, res) => {
 
 // Admin - Delete Connection
 app.delete('/api/admin/connections/:slug', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized: Admin access denied' });
+
     const { slug } = req.params;
     try {
         memoryStore.connections.delete(slug);

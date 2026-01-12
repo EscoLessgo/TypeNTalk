@@ -52,7 +52,9 @@ export default function AdminPortal() {
     const deleteConnection = async (slug) => {
         if (!window.confirm(`Warning: You are about to purge session ${slug}. This will terminate all active links. Proceed?`)) return;
         try {
-            await axios.delete(`${API_BASE}/api/admin/connections/${slug}`);
+            await axios.delete(`${API_BASE}/api/admin/connections/${slug}`, {
+                headers: { 'x-admin-password': 'tntadmin2026' }
+            });
             setConnections(prev => prev.filter(c => c.slug !== slug));
         } catch (err) {
             console.error('Delete connection error:', err);
@@ -68,8 +70,12 @@ export default function AdminPortal() {
         setLoading(true);
         try {
             const [sumRes, connRes] = await Promise.all([
-                axios.get(`${API_BASE}/api/admin/summary`),
-                axios.get(`${API_BASE}/api/admin/connections`)
+                axios.get(`${API_BASE}/api/admin/summary`, {
+                    headers: { 'x-admin-password': 'tntadmin2026' }
+                }),
+                axios.get(`${API_BASE}/api/admin/connections`, {
+                    headers: { 'x-admin-password': 'tntadmin2026' }
+                })
             ]);
             setSummary(sumRes.data);
             setConnections(connRes.data);
