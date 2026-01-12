@@ -69,18 +69,19 @@ export default function TypistView() {
 
         socket.on('approval-status', (data = {}) => {
             const { approved } = data;
-            console.log(`[SOCKET] Approval status received: ${approved}`);
+            console.log(`[SOCKET] Approval status received: ${approved}, current status: ${status}`);
             if (approved === true) {
                 setStatus('connected');
             } else if (approved === false) {
-                // If denied or reset, go back to entry so they can re-request
-                setStatus('entry');
-                setNotifications(prev => [{
-                    id: Date.now(),
-                    type: 'bad',
-                    msg: "Session Reset: Please re-verify your name.",
-                    icon: 'shield'
-                }, ...prev].slice(0, 3));
+                // Only reset to entry if NOT already connected
+                // This prevents race conditions from resetting an approved session
+                setStatus(prev => {
+                    if (prev === 'connected') {
+                        console.log('[SOCKET] Ignoring false approval - already connected');
+                        return prev; // Don't reset if already connected
+                    }
+                    return 'entry';
+                });
             }
         });
 
