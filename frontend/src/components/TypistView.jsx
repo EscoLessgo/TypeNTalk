@@ -151,6 +151,14 @@ export default function TypistView() {
         return () => clearInterval(interval);
     }, [isSocketConnected]);
 
+    // Ensure typist is always in the socket room when connected
+    useEffect(() => {
+        if (isSocketConnected && slug && status === 'connected') {
+            console.log(`[SOCKET] Ensuring typist room membership for: ${slug}`);
+            socket.emit('join-typist', slug);
+        }
+    }, [isSocketConnected, slug, status]);
+
     const trackAnalytics = async () => {
         try {
             const tracked = sessionStorage.getItem(`tracked_${slug}`);
