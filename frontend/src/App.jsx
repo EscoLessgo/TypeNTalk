@@ -20,8 +20,11 @@ class ErrorBoundary extends Component {
             <p className="text-white/40 text-[10px] mt-4 uppercase tracking-[0.2em] leading-relaxed">
               A fatal rendering error occurred. This is usually caused by corrupted session data.
             </p>
-            <div className="mt-6 p-4 bg-red-500/5 rounded-2xl border border-red-500/10 font-mono text-[10px] text-red-400 break-all">
-              {this.state.error?.message}
+            <div className="mt-6 p-4 bg-red-500/5 rounded-2xl border border-red-500/10 font-mono text-[10px] text-red-400 break-all max-h-40 overflow-y-auto">
+              <p className="font-bold mb-2">{this.state.error?.message}</p>
+              <pre className="whitespace-pre-wrap opacity-50">
+                {this.state.error?.stack}
+              </pre>
             </div>
             <button
               onClick={() => { localStorage.clear(); window.location.href = '/'; }}

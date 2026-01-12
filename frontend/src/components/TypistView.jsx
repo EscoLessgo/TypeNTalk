@@ -661,28 +661,28 @@ export default function TypistView() {
                     <AnimatePresence>
                         {notifications.length > 0 && (
                             <div className="fixed top-24 right-8 z-[60] flex flex-col gap-3 w-72 pointer-events-none">
-                                {notifications.map((n) => (
+                                {(notifications || []).map((n) => (
                                     <motion.div
-                                        key={n.id}
+                                        key={n?.id || Math.random()}
                                         initial={{ x: 100, opacity: 0, scale: 0.8 }}
                                         animate={{ x: 0, opacity: 1, scale: 1 }}
                                         exit={{ x: 100, opacity: 0, scale: 0.8 }}
-                                        className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'climax' ? 'border-red-500 bg-red-500/10' :
-                                            n.type === 'good' ? 'border-green-500 bg-green-500/10' :
+                                        className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n?.type === 'climax' ? 'border-red-500 bg-red-500/10' :
+                                            n?.type === 'good' ? 'border-green-500 bg-green-500/10' :
                                                 'border-purple-500 bg-purple-500/10'
                                             }`}
                                     >
-                                        <div className={`p-2 rounded-xl ${n.type === 'climax' ? 'bg-red-500/20 text-red-400' :
-                                            n.type === 'good' ? 'bg-green-500/20 text-green-400' :
+                                        <div className={`p-2 rounded-xl ${n?.type === 'climax' ? 'bg-red-500/20 text-red-400' :
+                                            n?.type === 'good' ? 'bg-green-500/20 text-green-400' :
                                                 'bg-purple-500/20 text-purple-400'
                                             }`}>
-                                            {n.icon === 'zap' && <Zap size={18} fill="currentColor" />}
-                                            {n.icon === 'thumbsup' && <ThumbsUp size={18} />}
-                                            {n.icon === 'thumbsdown' && <ThumbsDown size={18} />}
+                                            {n?.icon === 'zap' && <Zap size={18} fill="currentColor" />}
+                                            {n?.icon === 'thumbsup' && <ThumbsUp size={18} />}
+                                            {n?.icon === 'thumbsdown' && <ThumbsDown size={18} />}
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-[10px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50">Signal from Host</p>
-                                            <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n.msg}</p>
+                                            <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n?.msg || 'Feedback'}</p>
                                         </div>
                                     </motion.div>
                                 ))}

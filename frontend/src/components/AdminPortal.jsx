@@ -72,7 +72,7 @@ export default function AdminPortal() {
     };
 
     const getFlagEmoji = (countryCode) => {
-        if (!countryCode) return '🌐';
+        if (!countryCode || typeof countryCode !== 'string') return '🌐';
         const codePoints = countryCode
             .toUpperCase()
             .split('')
@@ -311,42 +311,42 @@ export default function AdminPortal() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {filteredConnections.map((conn) => (
-                                    <tr key={conn.id} className="hover:bg-white/[0.02] transition-colors group">
+                                {(filteredConnections || []).map((conn) => (
+                                    <tr key={conn?.id || Math.random()} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-6 sm:px-8 py-6">
                                             <code className="text-purple-400 font-mono font-bold text-xs sm:text-sm bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20 group-hover:border-purple-500/50 transition-all">
-                                                {conn.slug}
+                                                {conn?.slug || '????'}
                                             </code>
                                         </td>
                                         <td className="px-6 sm:px-8 py-6 text-sm font-black text-white italic uppercase tracking-tight">
-                                            {conn.host?.username || 'System Root'}
+                                            {conn?.host?.username || 'System Root'}
                                         </td>
                                         <td className="px-6 sm:px-8 py-6 text-center">
                                             <span className="text-xs font-black text-white/60 bg-white/5 px-2.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5 w-max mx-auto">
-                                                <Eye size={10} className="text-purple-500" /> {conn._count?.visitorLogs || 0}
+                                                <Eye size={10} className="text-purple-500" /> {conn?._count?.visitorLogs || 0}
                                             </span>
                                         </td>
                                         <td className="px-6 sm:px-8 py-6">
                                             <div className="flex items-center justify-center">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${conn.approved ? 'bg-green-500/10 text-green-500 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)] animate-pulse'}`}>
-                                                    {conn.approved ? 'Authorized' : 'Pending'}
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${conn?.approved ? 'bg-green-500/10 text-green-500 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)] animate-pulse'}`}>
+                                                    {conn?.approved ? 'Authorized' : 'Pending'}
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="px-6 sm:px-8 py-6 text-[9px] sm:text-[10px] font-bold text-white/40 uppercase tracking-tight hidden sm:table-cell text-right">
-                                            {formatDateTime(conn.createdAt)}
+                                            {formatDateTime(conn?.createdAt)}
                                         </td>
                                         <td className="px-6 sm:px-8 py-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => fetchConnAnalytics(conn)}
+                                                    onClick={() => conn?.slug && fetchConnAnalytics(conn)}
                                                     className="p-3 bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/30 text-white/40 hover:text-purple-400 rounded-xl transition-all inline-flex items-center gap-2 group/btn shadow-lg"
                                                 >
                                                     <BarChart3 size={16} className="group-hover/btn:scale-110 group-hover/btn:rotate-12 transition-transform" />
                                                     <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Oversight</span>
                                                 </button>
                                                 <button
-                                                    onClick={() => deleteConnection(conn.slug)}
+                                                    onClick={() => conn?.slug && deleteConnection(conn.slug)}
                                                     className="p-3 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/30 text-white/20 hover:text-red-400 rounded-xl transition-all group/purge"
                                                     title="Purge Connection"
                                                 >

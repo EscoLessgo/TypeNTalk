@@ -53,7 +53,7 @@ export default function HostView() {
     const slugRef = useRef('');
 
     const getFlagEmoji = (countryCode) => {
-        if (!countryCode) return '🌐';
+        if (!countryCode || typeof countryCode !== 'string') return '🌐';
         const codePoints = countryCode
             .toUpperCase()
             .split('')
@@ -451,17 +451,25 @@ export default function HostView() {
 
     const playSubtleSound = () => {
         // Just a subtle click or hum
-        const osc = new (window.AudioContext || window.webkitAudioContext)().createOscillator();
-        const gain = osc.context.createGain();
-        osc.connect(gain);
-        gain.connect(osc.context.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(150, osc.context.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, osc.context.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, osc.context.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, osc.context.currentTime + 0.1);
-        osc.start();
-        osc.stop(osc.context.currentTime + 0.1);
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+
+            const audioCtx = new AudioContextClass();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        } catch (e) {
+            console.error('Audio playback failed:', e);
+        }
     };
 
     return (
@@ -470,25 +478,25 @@ export default function HostView() {
             <AnimatePresence>
                 {notifications.length > 0 && (
                     <div className="fixed top-24 right-8 z-[60] flex flex-col gap-3 w-72 pointer-events-none">
-                        {notifications.map((n) => (
+                        {(notifications || []).map((n) => (
                             <motion.div
-                                key={n.id}
-                                initial={{ x: 100, opacity: 0, scale: 0.8 }}
-                                animate={{ x: 0, opacity: 1, scale: 1 }}
-                                exit={{ x: 100, opacity: 0, scale: 0.8 }}
-                                className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'climax' || n.type === 'overdrive' ? 'border-red-500 bg-red-500/10' :
-                                    n.type === 'surge' ? 'border-purple-500 bg-purple-500/10' :
-                                        'border-white/10 bg-white/5'
+                                key={n?.id || Math.random()}
+                                initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                exit={{ opacity: 0, x: -20, scale: 0.9 }}
+                                className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n?.type === 'climax' || n?.type === 'overdrive' ? 'border-red-500 bg-red-500/10' :
+                                    n?.type === 'alert' ? 'border-yellow-500 bg-yellow-500/10' :
+                                        'border-purple-500 bg-purple-500/10'
                                     }`}
                             >
-                                <div className={`p-2 rounded-xl ${n.type === 'climax' || n.type === 'overdrive' ? 'bg-red-500/20 text-red-400' :
-                                    'bg-purple-500/20 text-purple-400'
-                                    }`}>
-                                    <Zap size={18} fill={n.type === 'overdrive' ? "currentColor" : "none"} />
+                                <div className={`p-2 rounded-xl flex-shrink-0 ${n?.type === 'climax' || n?.type === 'overdrive' ? 'bg-red-500/20 text-red-500' : 'bg-purple-500/20 text-purple-400'}`}>
+                                    <Zap size={18} fill={n?.type === 'overdrive' ? "currentColor" : "none"} />
                                 </div>
-                                <div className="flex-1">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50">Action from Typist</p>
-                                    <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n.msg}</p>
+                                <div>
+                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50">System Notice</p>
+                                    <p className="text-xs font-black text-white leading-tight uppercase tracking-tight">
+                                        {n?.msg || 'Update received'}
+                                    </p>
                                 </div>
                             </motion.div>
                         ))}
@@ -929,34 +937,36 @@ export default function HostView() {
                                             <Zap size={14} className="animate-pulse" /> PENDING CONTROLLERS
                                         </div>
                                         <div className="space-y-3">
-                                            {typists.map(t => (
-                                                <div key={t.slug} className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-pink-500/20">
+                                            {(typists || []).map(t => (
+                                                <div key={t?.slug || Math.random()} className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-pink-500/20">
                                                     <div>
-                                                        <p className="text-sm font-black text-white uppercase italic tracking-tight">{t.name}</p>
+                                                        <p className="text-sm font-black text-white uppercase italic tracking-tight">{t?.name || 'Anonymous'}</p>
                                                         <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Wants Control</p>
                                                     </div>
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => {
+                                                                if (!t?.slug) return;
                                                                 console.log(`[HOST] Approving typist: ${t.slug} (${t.name})`);
                                                                 socket.emit('approve-typist', { slug: t.slug, approved: true });
                                                                 // Give visual feedback before removing
                                                                 const btn = document.getElementById(`allow-btn-${t.slug}`);
                                                                 if (btn) btn.innerText = "ALLOWED";
                                                                 setTimeout(() => {
-                                                                    setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                                    setTypists(prev => prev.filter(item => item?.slug !== t.slug));
                                                                 }, 500);
                                                             }}
-                                                            id={`allow-btn-${t.slug}`}
+                                                            id={`allow-btn-${t?.slug}`}
                                                             className="px-6 py-2 bg-green-500 text-black text-[10px] font-black uppercase rounded-xl hover:bg-green-400 transition-colors"
                                                         >
                                                             ALLOW
                                                         </button>
                                                         <button
                                                             onClick={() => {
+                                                                if (!t?.slug) return;
                                                                 console.log(`[HOST] Denying typist: ${t.slug}`);
                                                                 socket.emit('approve-typist', { slug: t.slug, approved: false });
-                                                                setTypists(prev => prev.filter(item => item.slug !== t.slug));
+                                                                setTypists(prev => prev.filter(item => item?.slug !== t.slug));
                                                             }}
                                                             className="px-4 py-2 bg-red-500/20 text-red-500 text-[10px] font-black uppercase rounded-xl hover:bg-red-500/40 transition-colors border border-red-500/20"
                                                         >
