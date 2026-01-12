@@ -71,6 +71,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HostView />} />
               <Route path="/t/:slug" element={<TypistView />} />
+              <Route path="/h/:slug" element={<TypistView />} />
               <Route path="/admin" element={<AdminPortal />} />
               {/* Catch-all for invalid URLs - shows a message with a manual link */}
               <Route path="*" element={

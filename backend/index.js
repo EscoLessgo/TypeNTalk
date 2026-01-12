@@ -56,10 +56,27 @@ async function getConnection(slug) {
     const memConn = memoryStore.connections.get(slug);
 
     try {
-        const conn = await prisma.connection.findUnique({
+        // 1. Check if it's a regular Connection slug
+        let conn = await prisma.connection.findUnique({
             where: { slug },
             include: { host: true }
         });
+
+        // 2. Fallback: Check if it's a Vanity Slug in the Host table
+        if (!conn) {
+            const host = await prisma.host.findUnique({ where: { vanitySlug: slug } });
+            if (host) {
+                // If vanity slug matches a host, we return a virtual connection object
+                return {
+                    id: `vanity-${host.id}`,
+                    slug: host.vanitySlug,
+                    hostId: host.id,
+                    host: host,
+                    approved: true // Vanity links are "always live" for entry, though socket rules still apply
+                };
+            }
+        }
+
         if (conn) {
             // Merge memory status if it exists
             if (memConn) return { ...conn, approved: memConn.approved };
@@ -75,7 +92,7 @@ async function getConnection(slug) {
             return conn;
         }
     } catch (e) {
-        console.error('[DB] Error fetching connection:', slug, e.message);
+        console.error('[getConnection] Error:', e);
     }
 
     if (memConn) {
@@ -201,13 +218,15 @@ app.post('/api/auth/google', async (req, res) => {
 
 // Settings - Update Host Settings
 app.post('/api/host/settings', async (req, res) => {
-    const { hostId, vanitySlug, settings } = req.body;
+    const { hostId, username, avatar, vanitySlug, settings } = req.body;
     if (!hostId) return res.status(400).json({ error: 'Host ID required' });
 
     try {
         const data = {};
+        if (username !== undefined) data.username = username.trim();
+        if (avatar !== undefined) data.avatar = avatar.trim();
         if (vanitySlug !== undefined) data.vanitySlug = vanitySlug.toLowerCase().trim() || null;
-        if (settings !== undefined) data.settings = JSON.stringify(settings);
+        if (settings !== undefined) data.settings = typeof settings === 'string' ? settings : JSON.stringify(settings);
 
         const host = await prisma.host.update({
             where: { id: hostId },
@@ -398,22 +417,25 @@ app.post('/api/connections/create', async (req, res) => {
             memoryStore.hosts.set(uid, host);
         }
 
-        // SLUG REUSE: Reuse the most recent slug for this host if it exists.
-        // This prevents the Typist from losing connection if the Host refreshes their page.
-        try {
-            const existing = await prisma.connection.findFirst({
-                where: { hostId: host.id },
-                orderBy: { createdAt: 'desc' }
-            });
-            // Reuse if less than 12 hours old
-            if (existing && (Date.now() - new Date(existing.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
-                existingSlug = existing.slug;
-            }
-        } catch (e) {
-            const memExisting = Array.from(memoryStore.connections.values())
-                .find(c => c.hostUid === uid);
-            if (memExisting && (Date.now() - new Date(memExisting.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
-                existingSlug = memExisting.slug;
+        // PRIORITY: If host has a vanity slug, ALWAYS use it.
+        if (host.vanitySlug) {
+            existingSlug = host.vanitySlug;
+        } else {
+            // SLUG REUSE: Reuse the most recent slug for this host if it exists.
+            try {
+                const existing = await prisma.connection.findFirst({
+                    where: { hostId: host.id },
+                    orderBy: { createdAt: 'desc' }
+                });
+                if (existing && (Date.now() - new Date(existing.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
+                    existingSlug = existing.slug;
+                }
+            } catch (e) {
+                const memExisting = Array.from(memoryStore.connections.values())
+                    .find(c => c.hostUid === uid);
+                if (memExisting && (Date.now() - new Date(memExisting.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
+                    existingSlug = memExisting.slug;
+                }
             }
         }
 
@@ -436,17 +458,18 @@ app.post('/api/connections/create', async (req, res) => {
 
             // 2. DB Sync
             try {
-                await prisma.connection.update({
+                await prisma.connection.upsert({
                     where: { slug: existingSlug },
-                    data: { approved: false }
+                    update: { approved: false },
+                    create: { slug: existingSlug, hostId: host.id, approved: false }
                 });
             } catch (e) {
-                console.warn('[DB] Failed to reset approval in DB, but memory is updated.');
+                console.warn('[DB] Failed to sync connection in DB, but memory is updated:', e.message);
             }
 
             // 3. Notify
             io.to(`typist:${existingSlug}`).emit('approval-status', { approved: false });
-            return res.json({ slug: existingSlug });
+            return res.json({ slug: existingSlug, isVanity: !!host.vanitySlug });
         }
 
         const slug = uuidv4().substring(0, 8);
@@ -464,7 +487,7 @@ app.post('/api/connections/create', async (req, res) => {
             });
         }
 
-        res.json({ slug });
+        res.json({ slug, isVanity: false });
     } catch (err) {
         console.error('[API] Create connection error:', err);
         res.status(500).json({ error: 'System Error', details: err.message });

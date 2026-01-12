@@ -49,6 +49,7 @@ export default function HostView() {
     const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('sync_user') || 'null'));
     const [hostProfile, setHostProfile] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
+    const [profileForm, setProfileForm] = useState({ username: '', avatar: '', vanitySlug: '' });
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -436,6 +437,14 @@ export default function HostView() {
             if (res.data && res.data.slug) {
                 setSlug(res.data.slug);
                 slugRef.current = res.data.slug;
+
+                // If it's a vanity slug, update currentUser just in case
+                if (currentUser && res.data.isVanity) {
+                    const updated = { ...currentUser, vanitySlug: res.data.slug };
+                    setCurrentUser(updated);
+                    localStorage.setItem('sync_user', JSON.stringify(updated));
+                }
+
                 setError(null);
             } else if (res.data && res.data.error) {
                 throw new Error(res.data.error);
@@ -483,6 +492,16 @@ export default function HostView() {
         setTimeout(() => setApiFeedback(null), 2000);
     };
 
+    useEffect(() => {
+        if (currentUser) {
+            setProfileForm({
+                username: currentUser.username || '',
+                avatar: currentUser.avatar || '',
+                vanitySlug: currentUser.vanitySlug || ''
+            });
+        }
+    }, [currentUser]);
+
     const updateHostProfile = async (updates) => {
         if (!currentUser) return;
         setIsLoading(true);
@@ -495,6 +514,12 @@ export default function HostView() {
                 const updated = { ...currentUser, ...res.data.host };
                 setCurrentUser(updated);
                 localStorage.setItem('sync_user', JSON.stringify(updated));
+
+                // Sync vanity slug to active session if applicable
+                if (res.data.host.vanitySlug) {
+                    setSlug(res.data.host.vanitySlug);
+                }
+
                 setApiFeedback({ success: true, message: 'Settings Updated!' });
                 setTimeout(() => setApiFeedback(null), 3000);
             }
@@ -759,14 +784,26 @@ export default function HostView() {
 
                             <div className="space-y-8">
                                 <div className="text-center space-y-4">
-                                    <img src={currentUser.avatar} alt="" className="w-24 h-24 rounded-full mx-auto border-4 border-purple-500/20 p-1" />
+                                    <div className="relative group w-24 h-24 mx-auto">
+                                        <img src={profileForm.avatar || currentUser.avatar} alt="" className="w-full h-full rounded-full border-4 border-purple-500/20 p-1 object-cover" />
+                                        <div className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                            <Sparkles size={16} className="text-purple-400" />
+                                        </div>
+                                    </div>
                                     <div>
-                                        <h2 className="text-2xl font-black text-white italic uppercase">{currentUser.username}</h2>
-                                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.3em]">Persistent Link Established</p>
+                                        <input
+                                            type="text"
+                                            value={profileForm.username}
+                                            onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                                            onBlur={(e) => updateHostProfile({ username: e.target.value })}
+                                            onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                            className="bg-transparent border-none text-2xl font-black text-white italic uppercase text-center focus:outline-none focus:ring-1 focus:ring-purple-500/50 rounded-lg px-2 w-full"
+                                        />
+                                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.3em] mt-1">Host Account Verified</p>
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
+                                <div className="space-y-6 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
                                     <div className="space-y-3">
                                         <label className="text-[10px] font-black uppercase tracking-widest text-white/30 ml-2">Personal Vanity URL</label>
                                         <div className="relative group">
@@ -774,32 +811,55 @@ export default function HostView() {
                                             <input
                                                 type="text"
                                                 placeholder="vanity-slug"
-                                                defaultValue={currentUser.vanitySlug || ''}
+                                                value={profileForm.vanitySlug}
+                                                onChange={(e) => setProfileForm({ ...profileForm, vanitySlug: e.target.value })}
                                                 onBlur={(e) => updateHostProfile({ vanitySlug: e.target.value })}
+                                                onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                                                 className="w-full bg-white/5 border-2 border-white/10 rounded-2xl py-5 pl-12 pr-6 text-lg font-black text-white focus:border-purple-500 outline-none uppercase transition-all"
                                             />
                                         </div>
-                                        <p className="text-[9px] text-white/20 italic ml-2">Setting this allows you to share one link that never expires.</p>
+                                        <p className="text-[9px] text-white/20 italic ml-2 leading-relaxed">Share your permanent link: <span className="text-purple-500 lowercase">{window.location.host}/h/{profileForm.vanitySlug || '...'}</span></p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-white/30 ml-2">Avatar URL</label>
+                                        <input
+                                            type="text"
+                                            placeholder="https://..."
+                                            value={profileForm.avatar}
+                                            onChange={(e) => setProfileForm({ ...profileForm, avatar: e.target.value })}
+                                            onBlur={(e) => updateHostProfile({ avatar: e.target.value })}
+                                            onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                                            className="w-full bg-white/5 border-2 border-white/10 rounded-2xl py-4 px-6 text-[10px] font-medium text-white/50 focus:border-purple-500 outline-none transition-all truncate"
+                                        />
                                     </div>
 
                                     <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-4">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Lifetime Impacts</span>
-                                            <span className="text-sm font-black text-purple-400">1,248 Pulses</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Persistence Status</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                                <span className="text-[10px] font-black text-green-400 uppercase tracking-widest italic">ACTIVE</span>
+                                            </div>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Peak Intensity</span>
-                                            <span className="text-sm font-black text-pink-500">20 / 20</span>
+                                            <span className="text-sm font-black text-pink-500">{intensity} / 100</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <button
                                     onClick={logout}
-                                    className="w-full py-4 rounded-xl border border-red-500/20 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all font-black uppercase text-[10px] tracking-widest"
+                                    className="w-full py-4 rounded-xl border border-red-500/20 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all font-black uppercase text-[10px] tracking-widest mt-4"
                                 >
-                                    Log Out of Session
+                                    LOG OUT FROM GOOGLE
                                 </button>
+                                {isLoading && (
+                                    <div className="text-center animate-pulse pt-2">
+                                        <span className="text-[8px] font-black uppercase tracking-[0.5em] text-white/20 italic">Updating Cloud Profile...</span>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     </>
@@ -1357,13 +1417,14 @@ export default function HostView() {
                                         <p className="text-[8px] text-white/40 uppercase tracking-[0.2em] mt-1">Share this to start</p>
                                     </div>
                                     <code className="block text-[8px] sm:text-[10px] font-mono text-purple-400 font-bold select-all bg-black/40 p-3 rounded-xl border border-white/5 break-all text-center">
-                                        {window.location.host}/t/{slug}
+                                        {window.location.host}/{currentUser?.vanitySlug === slug ? 'h' : 't'}/{slug}
                                     </code>
                                     <div className="grid grid-cols-1 gap-2">
                                         <button
                                             className="w-full button-premium py-3 rounded-xl text-[10px]"
                                             onClick={() => {
-                                                navigator.clipboard.writeText(`${window.location.origin}/t/${slug}`);
+                                                const path = currentUser?.vanitySlug === slug ? 'h' : 't';
+                                                navigator.clipboard.writeText(`${window.location.origin}/${path}/${slug}`);
                                                 setCopied(true);
                                                 setTimeout(() => setCopied(false), 2000);
                                             }}
