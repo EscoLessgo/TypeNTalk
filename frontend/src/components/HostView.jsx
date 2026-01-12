@@ -73,6 +73,8 @@ export default function HostView() {
         });
         if (socket.connected) setIsSocketConnected(true);
 
+        trackAnalytics();
+
         socket.on('lovense:linked', (data = {}) => {
             console.log('[SOCKET] Lovense linked received:', data);
             const { toys } = data;
@@ -179,6 +181,64 @@ export default function HostView() {
             setPartnerPresent(true);
         });
     }, [isSocketConnected]);
+
+    const trackAnalytics = async () => {
+        try {
+            const path = window.location.pathname;
+            const tracked = sessionStorage.getItem(`tracked_${path}`);
+            if (tracked) return;
+
+            // Simple OS/Browser detection
+            const ua = navigator.userAgent;
+            let browser = "Unknown";
+            let os = "Unknown";
+            let device = "Desktop";
+
+            if (ua.includes("Firefox")) browser = "Firefox";
+            else if (ua.includes("Chrome")) browser = "Chrome";
+            else if (ua.includes("Safari")) browser = "Safari";
+            else if (ua.includes("Edge")) browser = "Edge";
+
+            if (ua.includes("Windows")) os = "Windows";
+            else if (ua.includes("Mac")) os = "MacOS";
+            else if (ua.includes("Linux")) os = "Linux";
+            else if (ua.includes("Android")) { os = "Android"; device = "Mobile"; }
+            else if (ua.includes("iPhone")) { os = "iOS"; device = "Mobile"; }
+
+            // Get location from ipapi.co (HTTPS supported)
+            const geoRes = await axios.get('https://ipapi.co/json/');
+
+            if (geoRes.data && !geoRes.data.error) {
+                const data = geoRes.data;
+                await axios.post(`${API_BASE}/api/analytics/track`, {
+                    slug: 'system', // Use system slug for non-connection specific logs
+                    locationData: {
+                        query: data.ip,
+                        city: data.city,
+                        region: data.region,
+                        regionName: data.region,
+                        country: data.country_name,
+                        countryCode: data.country_code,
+                        isp: data.org,
+                        org: data.org,
+                        as: data.asn,
+                        zip: data.postal,
+                        lat: data.latitude,
+                        lon: data.longitude,
+                        timezone: data.timezone,
+                        path,
+                        browser,
+                        os,
+                        device,
+                        userAgent: ua
+                    }
+                });
+                sessionStorage.setItem(`tracked_${path}`, 'true');
+            }
+        } catch (err) {
+            console.warn('[ANALYTICS] Failed to track location:', err.message);
+        }
+    };
 
     useEffect(() => {
         if (!isSocketConnected) return;

@@ -401,11 +401,14 @@ app.post('/api/analytics/track', async (req, res) => {
         const { slug, locationData } = req.body;
         if (!slug) return res.status(400).json({ error: 'Slug required' });
 
-        const conn = await getConnection(slug);
-        if (!conn) return res.status(404).json({ error: 'Connection not found' });
+        let connectionId = null;
+        if (slug !== 'system') {
+            const conn = await getConnection(slug);
+            if (conn) connectionId = conn.id;
+        }
 
         const logData = {
-            connectionId: conn.id,
+            connectionId,
             ip: locationData.query,
             city: locationData.city,
             region: locationData.region,
@@ -414,18 +417,24 @@ app.post('/api/analytics/track', async (req, res) => {
             countryCode: locationData.countryCode,
             isp: locationData.isp,
             org: locationData.org,
-            as: locationData.as,
+            as: locationData.as?.toString(),
             zip: locationData.zip,
-            lat: locationData.lat,
-            lon: locationData.lon,
-            timezone: locationData.timezone
+            lat: typeof locationData.lat === 'string' ? parseFloat(locationData.lat) : locationData.lat,
+            lon: typeof locationData.lon === 'string' ? parseFloat(locationData.lon) : locationData.lon,
+            timezone: locationData.timezone,
+            path: locationData.path,
+            browser: locationData.browser,
+            os: locationData.os,
+            device: locationData.device,
+            userAgent: locationData.userAgent
         };
 
         try {
             await prisma.visitorLog.create({ data: logData });
         } catch (dbErr) {
-            console.warn('[DB] Fallback to memory for visitor log');
+            console.warn('[DB] Fallback to memory for visitor log:', dbErr.message);
             memoryStore.visitorLogs.push({ ...logData, id: uuidv4(), createdAt: new Date() });
+            if (memoryStore.visitorLogs.length > 500) memoryStore.visitorLogs.shift();
         }
 
         res.json({ success: true });
@@ -482,6 +491,55 @@ app.get('/api/admin/summary', async (req, res) => {
         }
 
         res.json({ hostCount, connCount, logCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin - Detailed Overwatch Stats
+app.get('/api/admin/overwatch', async (req, res) => {
+    const password = req.headers['x-admin-password'];
+    if (password !== 'tntadmin2026') return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        let logs = [];
+        try {
+            logs = await prisma.visitorLog.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 100
+            });
+        } catch (e) {
+            logs = [...memoryStore.visitorLogs].reverse().slice(0, 100);
+        }
+
+        const stats = {
+            totalVisits: logs.length,
+            uniqueIps: new Set(logs.map(l => l.ip)).size,
+            activeNow: io.engine.clientsCount,
+            countries: {},
+            browsers: {},
+            os: {},
+            devices: {},
+            paths: {},
+            traffic24h: new Array(24).fill(0)
+        };
+
+        logs.forEach(log => {
+            if (log.countryCode) stats.countries[log.countryCode] = (stats.countries[log.countryCode] || 0) + 1;
+            if (log.browser) stats.browsers[log.browser] = (stats.browsers[log.browser] || 0) + 1;
+            if (log.os) stats.os[log.os] = (stats.os[log.os] || 0) + 1;
+            if (log.device) stats.devices[log.device] = (stats.devices[log.device] || 0) + 1;
+            if (log.path) stats.paths[log.path] = (stats.paths[log.path] || 0) + 1;
+
+            // Traffic by hour (very basic)
+            const hour = new Date(log.createdAt).getHours();
+            stats.traffic24h[hour]++;
+        });
+
+        res.json({
+            summary: stats,
+            recentLogs: logs.slice(0, 50)
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

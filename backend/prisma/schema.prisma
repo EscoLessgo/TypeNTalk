@@ -42,9 +42,14 @@ model ResponseHistory {
 
 model VisitorLog {
   id           String     @id @default(uuid())
-  connectionId String
-  connection   Connection @relation(fields: [connectionId], references: [id])
+  connectionId String?    // Optional because we might log general visits too
+  connection   Connection? @relation(fields: [connectionId], references: [id])
   ip           String?
+  path         String?    // e.g. /admin, /6c3249df
+  userAgent    String?
+  browser      String?
+  os           String?
+  device       String?
   city         String?
   region       String?
   regionName   String?
