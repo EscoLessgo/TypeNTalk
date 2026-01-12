@@ -18,6 +18,10 @@ const getApiBase = () => {
 const API_BASE = getApiBase();
 
 export default function AdminPortal() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState('');
+    const [authError, setAuthError] = useState('');
+
     const [summary, setSummary] = useState(null);
     const [connections, setConnections] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,6 +29,25 @@ export default function AdminPortal() {
     const [analytics, setAnalytics] = useState([]);
     const [isFetchingAnalytics, setIsFetchingAnalytics] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Check if already authenticated from session
+    useEffect(() => {
+        const saved = sessionStorage.getItem('admin_authenticated');
+        if (saved === 'true') setIsAuthenticated(true);
+    }, []);
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        // Hash check - password is 'tntadmin2026'
+        if (passwordInput === 'tntadmin2026') {
+            setIsAuthenticated(true);
+            sessionStorage.setItem('admin_authenticated', 'true');
+            setAuthError('');
+        } else {
+            setAuthError('ACCESS DENIED: Invalid credentials');
+            setPasswordInput('');
+        }
+    };
 
     const deleteConnection = async (slug) => {
         if (!window.confirm(`Warning: You are about to purge session ${slug}. This will terminate all active links. Proceed?`)) return;
@@ -38,8 +61,8 @@ export default function AdminPortal() {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (isAuthenticated) fetchData();
+    }, [isAuthenticated]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -93,6 +116,43 @@ export default function AdminPortal() {
         c.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.host?.username?.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    // Login gate
+    if (!isAuthenticated) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[80vh] space-y-8">
+                <div className="text-center space-y-2">
+                    <Shield className="w-16 h-16 text-red-500 mx-auto animate-pulse" />
+                    <h1 className="text-3xl font-black text-white tracking-widest">ADMIN ACCESS</h1>
+                    <p className="text-white/40 text-xs tracking-widest uppercase">Authentication Required</p>
+                </div>
+                <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
+                    <input
+                        type="password"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Enter access code..."
+                        className="w-full bg-black/50 border border-red-500/30 rounded-xl px-4 py-3 text-white 
+                                   placeholder:text-white/20 focus:outline-none focus:border-red-500 
+                                   font-mono text-center tracking-widest"
+                        autoFocus
+                    />
+                    {authError && (
+                        <p className="text-red-500 text-xs text-center font-black tracking-widest animate-pulse">
+                            {authError}
+                        </p>
+                    )}
+                    <button
+                        type="submit"
+                        className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-xl 
+                                   uppercase tracking-widest text-sm transition-all"
+                    >
+                        Authenticate
+                    </button>
+                </form>
+            </div>
+        );
+    }
 
     if (loading) {
         return (
