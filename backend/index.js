@@ -546,10 +546,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('join-host', (uid) => {
+    socket.on('join-host', (rawUid) => {
+        const uid = (rawUid || '').toLowerCase().trim();
+        if (!uid) return;
+
         socket.uid = uid;
 
-        // Join the full UID room
+        // Join the full UID room (Always lowercase)
         socket.join(`host:${uid}`);
         console.log(`[SOCKET] Host ${uid} joined room host:${uid}`);
 

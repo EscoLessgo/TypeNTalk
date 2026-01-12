@@ -180,11 +180,20 @@ export default function AdminPortal() {
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Admin Control Center</span>
                     </div>
                     <h1 className="text-3xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white">
-                        SYSTEM <span className="text-gradient">OVERWATCH <span className="text-white/20">v2.0</span></span>
+                        SYSTEM <span className="text-gradient">OVERWATCH <span className="text-white/20">v2.2-SECURE</span></span>
                     </h1>
                 </div>
 
                 <div className="flex items-center gap-4 relative z-10">
+                    <button
+                        onClick={() => {
+                            sessionStorage.removeItem('admin_authenticated');
+                            window.location.reload();
+                        }}
+                        className="px-4 py-2 border border-red-500/20 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                        Force Logout
+                    </button>
                     <button
                         onClick={fetchData}
                         className="p-4 glass rounded-2xl text-white/40 hover:text-purple-400 hover:border-purple-500/30 transition-all flex items-center gap-2 group"
