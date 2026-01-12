@@ -272,27 +272,94 @@ export default function AdminPortal() {
                         </div>
                     </div>
 
-                    {/* Geolocation Table */}
-                    <div className="glass rounded-[2rem] border-white/5 p-8 relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40">Global Node Distribution</h3>
-                            <Globe size={16} className="text-purple-400" />
+                    {/* Heatmap Visualizer */}
+                    <div className="glass rounded-[2rem] border-white/5 p-8 relative overflow-hidden min-h-[400px]">
+                        <div className="flex items-center justify-between mb-8 relative z-10">
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40">Global Node Distribution</h3>
+                                <p className="text-[10px] text-purple-400 font-bold uppercase mt-1">Real-time Traffic Heatmap</p>
+                            </div>
+                            <Globe size={16} className="text-purple-400 animate-spin-slow" />
                         </div>
-                        <div className="space-y-4">
-                            {Object.entries(summary?.countries || {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([code, count], i) => (
-                                <div key={i} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3 w-32">
-                                        <span className="text-lg">{getFlagEmoji(code)}</span>
-                                        <span className="text-xs font-bold text-white uppercase tracking-widest">{code}</span>
-                                    </div>
-                                    <div className="flex items-center gap-4 flex-1 mx-8 text-right">
-                                        <div className="h-1 bg-white/5 rounded-full flex-1 overflow-hidden">
+
+                        <div className="relative w-full aspect-[2/1] bg-black/20 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center">
+                            {/* Stylized Dot Matrix World Map (Simplified) */}
+                            <div className="absolute inset-0 opacity-10 pointer-events-none"
+                                style={{
+                                    backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+                                    backgroundSize: '12px 12px'
+                                }}
+                            />
+
+                            {/* Interactive Map Overlay */}
+                            <div className="relative w-full h-full p-4 overflow-hidden">
+                                {/* Simplified SVG Map Mask (Invisible but for layout) */}
+                                <svg viewBox="0 0 1000 500" className="w-full h-full opacity-5">
+                                    <path d="M150,150 Q200,100 300,150 T450,150 T600,150 T850,200 T900,350 T700,450 T400,450 T150,350 Z" fill="white" />
+                                </svg>
+
+                                {/* Dynamic Pings based on Country Data */}
+                                {Object.entries(summary?.countries || {}).map(([code, count], i) => {
+                                    // Map common country codes to rough SVG coordinates (0-100%)
+                                    const coords = {
+                                        'US': { x: 20, y: 35 }, 'CA': { x: 18, y: 25 }, 'MX': { x: 15, y: 45 },
+                                        'GB': { x: 48, y: 30 }, 'FR': { x: 50, y: 35 }, 'DE': { x: 52, y: 30 },
+                                        'RU': { x: 70, y: 25 }, 'CN': { x: 80, y: 40 }, 'JP': { x: 90, y: 40 },
+                                        'AU': { x: 85, y: 80 }, 'BR': { x: 30, y: 70 }, 'IN': { x: 72, y: 50 },
+                                        'DE': { x: 52, y: 30 }, 'IT': { x: 52, y: 40 }, 'ES': { x: 48, y: 40 },
+                                        'ZA': { x: 55, y: 80 }, 'EG': { x: 58, y: 50 }, 'SA': { x: 62, y: 50 }
+                                    };
+
+                                    const pos = coords[code] || { x: 50 + (Math.random() * 40 - 20), y: 50 + (Math.random() * 40 - 20) };
+                                    const intensity = Math.min(count * 10, 100);
+
+                                    return (
+                                        <motion.div
+                                            key={code}
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="absolute"
+                                            style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                        >
+                                            {/* Pulse Ring */}
                                             <div
-                                                className="h-full bg-purple-500"
-                                                style={{ width: `${(count / (summary.totalVisits || 1)) * 100}%` }}
+                                                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full animate-ping bg-purple-500/40"
+                                                style={{ width: `${20 + (intensity / 2)}px`, height: `${20 + (intensity / 2)}px` }}
                                             />
-                                        </div>
-                                        <span className="text-xs font-black text-white italic min-w-[20px]">{count}</span>
+                                            {/* Core Dot */}
+                                            <div
+                                                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] z-10"
+                                                style={{ width: '6px', height: '6px' }}
+                                            >
+                                                <div className="absolute top-8 left-1/2 -translate-x-1/2 glass px-2 py-1 rounded text-[8px] font-black whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {code}: {count}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Legend / Overlay Text */}
+                            <div className="absolute bottom-6 left-6 flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                    <span className="text-[9px] font-black uppercase text-white/40 tracking-widest">Active Uplink Clusters</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Top Nodes List (Slim Version) */}
+                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-4">
+                            {Object.entries(summary?.countries || {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([code, count], i) => (
+                                <div key={i} className="flex flex-col gap-1 border-l-2 border-purple-500/20 pl-3 py-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px]">{getFlagEmoji(code)}</span>
+                                        <span className="text-[10px] font-black text-white/60 tracking-tighter">{code}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg font-black text-white italic">{count}</span>
+                                        <span className="text-[8px] font-bold text-white/20 uppercase">Hits</span>
                                     </div>
                                 </div>
                             ))}
