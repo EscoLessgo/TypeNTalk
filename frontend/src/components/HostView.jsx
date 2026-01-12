@@ -381,7 +381,15 @@ export default function HostView() {
             return;
         }
 
-        socket.emit('host-feedback', { uid: customName, type, slug: targetSlug });
+        if (!socket.connected) {
+            console.error('[HOST] Socket not connected!');
+            setApiFeedback({ success: false, message: 'SIGNAL ERROR: Socket disconnected.' });
+            return;
+        }
+
+        socket.emit('host-feedback', { uid: customName, type, slug: targetSlug }, (ack) => {
+            console.log('[HOST] Feedback acknowledgement:', ack);
+        });
         // Visual feedback locally
         setApiFeedback({ success: true, message: `Feedback Sent: ${type.toUpperCase()}` });
         setTimeout(() => setApiFeedback(null), 3000);

@@ -611,12 +611,17 @@ io.on('connection', (socket) => {
         io.to(room).emit('approval-status', { approved });
     });
 
-    socket.on('host-feedback', (data = {}) => {
+    socket.on('host-feedback', (data = {}, ack) => {
         const { uid, type, slug } = data;
         const room = `typist:${slug}`;
         const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
 
         console.log(`[SIGNAL] Host "${uid}" -> Typist room "${room}" (Size: ${roomSize}) | Type: ${type}`);
+
+        // Send acknowledgement if callback provided
+        if (typeof ack === 'function') {
+            ack({ received: true, room, roomSize });
+        }
 
         if (!slug) {
             socket.emit('api-feedback', { success: false, message: "ERROR: Missing connection slug." });
