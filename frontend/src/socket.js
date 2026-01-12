@@ -8,6 +8,12 @@ const getApiBase = () => {
     return window.location.origin;
 };
 
-const socket = io(getApiBase());
+const socket = io(getApiBase(), {
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+});
 
 export default socket;
