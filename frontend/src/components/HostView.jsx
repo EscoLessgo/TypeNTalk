@@ -46,46 +46,8 @@ export default function HostView() {
     const [latency, setLatency] = useState(0);
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [notifications, setNotifications] = useState([]);
-    const [showAnalytics, setShowAnalytics] = useState(false);
-    const [isFetchingAnalytics, setIsFetchingAnalytics] = useState(false);
-    const [analytics, setAnalytics] = useState([]);
     const audioRef = useRef(null);
     const slugRef = useRef('');
-
-    const getFlagEmoji = (countryCode) => {
-        if (!countryCode || typeof countryCode !== 'string') return '🌐';
-        const codePoints = countryCode
-            .toUpperCase()
-            .split('')
-            .map(char => 127397 + char.charCodeAt());
-        return String.fromCodePoint(...codePoints);
-    };
-
-    const formatRelativeTime = (date) => {
-        const now = new Date();
-        const diff = Math.floor((now - new Date(date)) / 1000);
-        if (diff < 60) return 'just now';
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-        return new Date(date).toLocaleDateString();
-    };
-
-    const fetchAnalytics = async () => {
-        const targetSlug = slug || slugRef.current;
-        if (!targetSlug) return;
-
-        setIsFetchingAnalytics(true);
-        try {
-            const res = await axios.get(`${API_BASE}/api/analytics/${targetSlug}`);
-            setAnalytics(Array.isArray(res.data) ? res.data : []);
-            setShowAnalytics(true);
-        } catch (err) {
-            console.error('Fetch analytics error:', err);
-            setApiFeedback({ success: false, message: 'Failed to load analytics' });
-        } finally {
-            setIsFetchingAnalytics(false);
-        }
-    };
 
 
     const customNameRef = useRef(customName);
@@ -1121,13 +1083,6 @@ export default function HostView() {
                                         {copied ? 'COPIED!' : 'COPY LINK'}
                                     </button>
                                     <button
-                                        onClick={fetchAnalytics}
-                                        disabled={isFetchingAnalytics}
-                                        className="w-full py-2 border border-blue-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-500/5 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <Activity size={12} /> {isFetchingAnalytics ? 'LOADING...' : 'VIEW ANALYTICS'}
-                                    </button>
-                                    <button
                                         onClick={testVibration}
                                         className="w-full py-2 border border-purple-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/5 transition-all flex items-center justify-center gap-2"
                                     >
@@ -1238,112 +1193,6 @@ export default function HostView() {
                     </button>
                 )}
             </section>
-
-            {/* Analytics Modal */}
-            <AnimatePresence>
-                {showAnalytics && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setShowAnalytics(false)}
-                            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110]"
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="fixed inset-4 md:inset-20 glass-premium rounded-[3rem] z-[111] overflow-hidden flex flex-col border border-white/10"
-                        >
-                            <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                                <div>
-                                    <h2 className="text-3xl font-black text-gradient italic uppercase tracking-tighter">Session Analytics</h2>
-                                    <p className="text-[10px] text-white/40 uppercase tracking-[0.3em] font-black">Visitor Location & Network Insights</p>
-                                </div>
-                                <button
-                                    onClick={() => setShowAnalytics(false)}
-                                    className="p-3 hover:bg-white/5 rounded-full transition-colors text-white/40 hover:text-white"
-                                >
-                                    <X size={24} />
-                                </button>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
-                                {/* Stats Cards */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {[
-                                        { label: 'Total Views', value: (analytics || []).length, icon: Eye, color: 'text-blue-400' },
-                                        { label: 'Unique IPs', value: new Set((analytics || []).map(a => a?.ip).filter(Boolean)).size, icon: Shield, color: 'text-green-400' },
-                                        { label: 'Countries', value: new Set((analytics || []).map(a => a?.countryCode).filter(Boolean)).size, icon: Activity, color: 'text-purple-400' },
-                                        { label: 'Cities', value: new Set((analytics || []).map(a => a?.city).filter(Boolean)).size, icon: Target, color: 'text-pink-400' }
-                                    ].map((stat, i) => (
-                                        <div key={i} className="glass p-6 rounded-3xl border-white/5 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <stat.icon size={16} className={stat.color} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/20">{stat.label}</span>
-                                            </div>
-                                            <p className="text-3xl font-black text-white">{stat.value}</p>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Top Locations */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="glass p-8 rounded-3xl border-white/5 space-y-6">
-                                        <h3 className="text-xs font-black uppercase tracking-widest text-white/40 border-b border-white/5 pb-4">Top Locations</h3>
-                                        <div className="space-y-4">
-                                            {Object.entries((analytics || []).reduce((acc, curr) => {
-                                                const key = `${curr?.countryCode || '??'}|${curr?.city || 'Unknown'}`;
-                                                acc[key] = (acc[key] || 0) + 1;
-                                                return acc;
-                                            }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, count], i) => {
-                                                const [code, city] = key.split('|');
-                                                return (
-                                                    <div key={i} className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-2xl">{getFlagEmoji(code)}</span>
-                                                            <div>
-                                                                <p className="text-sm font-black text-white italic uppercase">{city || 'Unknown'}</p>
-                                                                <p className="text-[8px] text-white/30 uppercase font-black">{code}</p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-xl font-black text-white/20">{count}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {analytics.length === 0 && <p className="text-center py-10 text-white/20 uppercase text-[10px] font-black tracking-widest">No location data yet</p>}
-                                        </div>
-                                    </div>
-
-                                    {/* Recent Views Table */}
-                                    <div className="glass p-8 rounded-3xl border-white/5 space-y-6 flex flex-col">
-                                        <h3 className="text-xs font-black uppercase tracking-widest text-white/40 border-b border-white/5 pb-4">Recent Visits</h3>
-                                        <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-                                            {(analytics || []).map((visit, i) => (
-                                                <div key={i} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xl">{getFlagEmoji(visit?.countryCode)}</span>
-                                                        <div>
-                                                            <p className="text-xs font-black text-white italic uppercase">{visit?.city || 'Unknown'}, {visit?.regionName || visit?.region || '??'}</p>
-                                                            <p className="text-[8px] text-white/30 uppercase font-black tracking-tighter truncate w-32">{visit?.isp || 'Unknown ISP'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black text-white uppercase">{formatRelativeTime(visit?.createdAt)}</p>
-                                                        <p className="text-[8px] text-white/20 font-mono">{(visit?.ip || '0.0.0.0').replace(/\d+$/, 'xxx')}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {(analytics || []).length === 0 && <p className="text-center py-10 text-white/20 uppercase text-[10px] font-black tracking-widest">No visits recorded</p>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
         </div>
     );
 }
