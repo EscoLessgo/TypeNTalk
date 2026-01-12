@@ -537,8 +537,20 @@ io.on('connection', (socket) => {
 
     socket.on('join-host', (uid) => {
         socket.uid = uid;
+
+        // Join the full UID room
         socket.join(`host:${uid}`);
         console.log(`[SOCKET] Host ${uid} joined room host:${uid}`);
+
+        // Also join rooms for all prefix variants of the UID
+        // This ensures old connections with shorter UIDs can still reach this host
+        const parts = uid.split('_');
+        for (let i = 1; i < parts.length; i++) {
+            const prefix = parts.slice(0, i).join('_');
+            socket.join(`host:${prefix}`);
+            console.log(`[SOCKET] Host also joined legacy room host:${prefix}`);
+        }
+
         socket.emit('host:ready', { uid });
     });
 
