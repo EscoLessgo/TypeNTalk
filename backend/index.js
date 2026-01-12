@@ -143,7 +143,7 @@ app.post('/api/auth/google', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({
             idToken: credential,
-            audience: [process.env.GOOGLE_CLIENT_ID]
+            audience: [process.env.GOOGLE_CLIENT_ID, '779349870400-qpo1cgn7v03624fvprfasii6g6cooj99.apps.googleusercontent.com'].filter(Boolean)
         });
         const payload = ticket.getPayload();
         const { sub: googleId, email, name, picture } = payload;
