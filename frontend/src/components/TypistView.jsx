@@ -45,6 +45,7 @@ export default function TypistView() {
     const analyzerRef = useRef(null);
     const streamRef = useRef(null);
     const lastPulseRef = useRef(0);
+    const isMicOnRef = useRef(false);
 
     useEffect(() => {
         const onConnect = () => {
@@ -265,8 +266,6 @@ export default function TypistView() {
         }
     };
 
-    const isMicOnRef = useRef(false);
-
     const startMic = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -412,39 +411,9 @@ export default function TypistView() {
     return (
         <div className="max-w-5xl mx-auto space-y-6 pb-20 relative px-4 sm:px-0">
             {/* Notification System Overlay */}
-            <AnimatePresence>
-                {notifications.length > 0 && (
-                    <div className="fixed top-24 right-8 z-[100] flex flex-col gap-3 w-72 pointer-events-none">
-                        {notifications.map((n) => (
-                            <motion.div
-                                key={n.id}
-                                initial={{ x: 100, opacity: 0, scale: 0.8 }}
-                                animate={{ x: 0, opacity: 1, scale: 1 }}
-                                exit={{ x: 100, opacity: 0, scale: 0.8 }}
-                                className={`p-4 rounded-2xl glass border-2 flex items-start gap-3 shadow-2xl ${n.type === 'good' ? 'border-green-500 bg-green-500/10' :
-                                    n.type === 'bad' ? 'border-red-500 bg-red-500/10' :
-                                        n.type === 'climax' ? 'border-pink-500 bg-pink-500/10 kinky-glow-pink' :
-                                            n.type === 'surge' ? 'border-purple-500 bg-purple-500/10' :
-                                                'border-white/10 bg-white/5'
-                                    }`}
-                            >
-                                <div className={`p-2 rounded-xl ${n.type === 'good' ? 'bg-green-500/20 text-green-400' :
-                                    n.type === 'bad' ? 'bg-red-500/20 text-red-400' :
-                                        'bg-pink-500/20 text-pink-400'
-                                    }`}>
-                                    {n.type === 'good' && <ThumbsUp size={18} />}
-                                    {n.type === 'bad' && <ThumbsDown size={18} />}
-                                    {(n.type === 'climax' || n.type === 'surge') && <Zap size={18} fill="currentColor" />}
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] italic mb-1 opacity-50 text-white">Signal from Host</p>
-                                    <p className="text-xs font-black uppercase tracking-tight text-white leading-tight">{n.msg}</p>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
-                )}
-            </AnimatePresence>
+            <div className="hidden">
+                {/* Consolidating notifications to the header system only to avoid duplicates */}
+            </div>
 
             <AnimatePresence>
                 {showGuide && (
@@ -661,9 +630,9 @@ export default function TypistView() {
                     <AnimatePresence>
                         {notifications.length > 0 && (
                             <div className="fixed top-24 right-8 z-[60] flex flex-col gap-3 w-72 pointer-events-none">
-                                {(notifications || []).map((n) => (
+                                {(notifications || []).map((n, idx) => (
                                     <motion.div
-                                        key={n?.id || Math.random()}
+                                        key={n?.id || `notif-${idx}`}
                                         initial={{ x: 100, opacity: 0, scale: 0.8 }}
                                         animate={{ x: 0, opacity: 1, scale: 1 }}
                                         exit={{ x: 100, opacity: 0, scale: 0.8 }}

@@ -311,8 +311,8 @@ export default function AdminPortal() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {(filteredConnections || []).map((conn) => (
-                                    <tr key={conn?.id || Math.random()} className="hover:bg-white/[0.02] transition-colors group">
+                                {(filteredConnections || []).map((conn, idx) => (
+                                    <tr key={conn?.id || `conn-${idx}`} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-6 sm:px-8 py-6">
                                             <code className="text-purple-400 font-mono font-bold text-xs sm:text-sm bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20 group-hover:border-purple-500/50 transition-all">
                                                 {conn?.slug || '????'}
