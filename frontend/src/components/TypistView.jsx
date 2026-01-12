@@ -229,6 +229,7 @@ export default function TypistView() {
         // Visual feedback and pulse
         const now = Date.now();
         if (now - lastPulseRef.current > 100) { // Throttling
+            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=9`);
             socket.emit('typing-pulse', { slug, intensity: 9 });
             setIntensity(60);
             setTimeout(() => setIntensity(0), 100);
