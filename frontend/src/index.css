@@ -199,3 +199,36 @@ body {
 .kinky-glow-red {
   filter: drop-shadow(0 0 30px rgba(239, 68, 68, 0.6));
 }
+
+/* Leaflet Pulse & Map Overrides */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-tooltip {
+  background: rgba(13, 13, 15, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 12px !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+@keyframes map-pulse {
+  0% {
+    r: 2;
+    opacity: 0.8;
+  }
+
+  100% {
+    r: 8;
+    opacity: 0;
+  }
+}
+
+.animate-pulse-map {
+  animation: map-pulse 2s infinite ease-out;
+}

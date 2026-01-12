@@ -6,6 +6,8 @@ import {
     Filter, RefreshCw, BarChart3, Clock, Eye, Target, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const getApiBase = () => {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
@@ -272,94 +274,119 @@ export default function AdminPortal() {
                         </div>
                     </div>
 
-                    {/* Heatmap Visualizer */}
-                    <div className="glass rounded-[2rem] border-white/5 p-8 relative overflow-hidden min-h-[400px]">
+                    {/* Heatmap Visualizer (Leaflet Edition) */}
+                    <div className="glass rounded-[2rem] border-white/5 p-8 relative overflow-hidden min-h-[500px] flex flex-col">
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <div>
-                                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40">Global Node Distribution</h3>
-                                <p className="text-[10px] text-purple-400 font-bold uppercase mt-1">Real-time Traffic Heatmap</p>
+                                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40">Global Traffic Matrix</h3>
+                                <p className="text-[10px] text-purple-400 font-bold uppercase mt-1">Live Node Deployment</p>
                             </div>
-                            <Globe size={16} className="text-purple-400 animate-spin-slow" />
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Map Synchronized</span>
+                                </div>
+                                <Globe size={16} className="text-purple-400 animate-spin-slow" />
+                            </div>
                         </div>
 
-                        <div className="relative w-full aspect-[2/1] bg-black/20 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center">
-                            {/* Stylized Dot Matrix World Map (Simplified) */}
-                            <div className="absolute inset-0 opacity-10 pointer-events-none"
-                                style={{
-                                    backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-                                    backgroundSize: '12px 12px'
-                                }}
-                            />
+                        <div className="flex-1 relative rounded-2xl border border-white/10 overflow-hidden shadow-2xl min-h-[350px]">
+                            <MapContainer
+                                center={[20, 0]}
+                                zoom={2}
+                                scrollWheelZoom={false}
+                                className="h-full w-full bg-black/40"
+                                style={{ background: '#070708' }}
+                                zoomControl={false}
+                                attributionControl={false}
+                            >
+                                <TileLayer
+                                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                                    noWrap={true}
+                                />
 
-                            {/* Interactive Map Overlay */}
-                            <div className="relative w-full h-full p-4 overflow-hidden">
-                                {/* Simplified SVG Map Mask (Invisible but for layout) */}
-                                <svg viewBox="0 0 1000 500" className="w-full h-full opacity-5">
-                                    <path d="M150,150 Q200,100 300,150 T450,150 T600,150 T850,200 T900,350 T700,450 T400,450 T150,350 Z" fill="white" />
-                                </svg>
-
-                                {/* Dynamic Pings based on Country Data */}
-                                {Object.entries(summary?.countries || {}).map(([code, count], i) => {
-                                    // Map common country codes to rough SVG coordinates (0-100%)
-                                    const coords = {
-                                        'US': { x: 20, y: 35 }, 'CA': { x: 18, y: 25 }, 'MX': { x: 15, y: 45 },
-                                        'GB': { x: 48, y: 30 }, 'FR': { x: 50, y: 35 }, 'DE': { x: 52, y: 30 },
-                                        'RU': { x: 70, y: 25 }, 'CN': { x: 80, y: 40 }, 'JP': { x: 90, y: 40 },
-                                        'AU': { x: 85, y: 80 }, 'BR': { x: 30, y: 70 }, 'IN': { x: 72, y: 50 },
-                                        'DE': { x: 52, y: 30 }, 'IT': { x: 52, y: 40 }, 'ES': { x: 48, y: 40 },
-                                        'ZA': { x: 55, y: 80 }, 'EG': { x: 58, y: 50 }, 'SA': { x: 62, y: 50 }
-                                    };
-
-                                    const pos = coords[code] || { x: 50 + (Math.random() * 40 - 20), y: 50 + (Math.random() * 40 - 20) };
-                                    const intensity = Math.min(count * 10, 100);
+                                {/* Render pings from summary data (aggregated) */}
+                                {Object.entries(summary?.countries || {}).map(([code, count]) => {
+                                    // Use first available log for lat/lon or fallback to central coords
+                                    const sampleLog = recentLogs.find(l => l.countryCode === code && l.lat && l.lon);
+                                    if (!sampleLog) return null;
 
                                     return (
-                                        <motion.div
+                                        <CircleMarker
                                             key={code}
-                                            initial={{ scale: 0, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1 }}
-                                            className="absolute"
-                                            style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                            center={[sampleLog.lat, sampleLog.lon]}
+                                            radius={Math.min(5 + count * 2, 25)}
+                                            pathOptions={{
+                                                fillColor: '#a855f7',
+                                                color: '#d946ef',
+                                                weight: 1,
+                                                opacity: 0.8,
+                                                fillOpacity: 0.4
+                                            }}
                                         >
-                                            {/* Pulse Ring */}
-                                            <div
-                                                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full animate-ping bg-purple-500/40"
-                                                style={{ width: `${20 + (intensity / 2)}px`, height: `${20 + (intensity / 2)}px` }}
-                                            />
-                                            {/* Core Dot */}
-                                            <div
-                                                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] z-10"
-                                                style={{ width: '6px', height: '6px' }}
-                                            >
-                                                <div className="absolute top-8 left-1/2 -translate-x-1/2 glass px-2 py-1 rounded text-[8px] font-black whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {code}: {count}
+                                            <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent={false}>
+                                                <div className="glass p-2 border-none shadow-none text-white">
+                                                    <div className="flex items-center gap-2">
+                                                        <span>{getFlagEmoji(code)}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">{sampleLog.country}</span>
+                                                    </div>
+                                                    <div className="text-[12px] font-black text-purple-400 mt-1">{count} Hits Captured</div>
                                                 </div>
-                                            </div>
-                                        </motion.div>
+                                            </Tooltip>
+                                        </CircleMarker>
                                     );
                                 })}
-                            </div>
 
-                            {/* Legend / Overlay Text */}
-                            <div className="absolute bottom-6 left-6 flex flex-col gap-2">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                                    <span className="text-[9px] font-black uppercase text-white/40 tracking-widest">Active Uplink Clusters</span>
+                                {/* Individual Recent Pings */}
+                                {recentLogs.slice(0, 15).map((log, i) => (
+                                    log.lat && log.lon && (
+                                        <CircleMarker
+                                            key={`hit-${i}`}
+                                            center={[log.lat, log.lon]}
+                                            radius={2}
+                                            pathOptions={{
+                                                fillColor: '#fff',
+                                                color: '#fff',
+                                                weight: 0,
+                                                fillOpacity: 0.8
+                                            }}
+                                            className="animate-pulse-map"
+                                        />
+                                    )
+                                ))}
+                            </MapContainer>
+
+                            <div className="absolute bottom-4 left-4 z-[1000] space-y-2">
+                                <div className="glass px-4 py-2 rounded-xl flex items-center gap-3 border-purple-500/20">
+                                    <div className="flex -space-x-2">
+                                        {Object.keys(summary?.countries || {}).slice(0, 3).map(c => (
+                                            <span key={c} className="text-sm">{getFlagEmoji(c)}</span>
+                                        ))}
+                                    </div>
+                                    <span className="text-[9px] font-black text-white/60 uppercase tracking-widest">
+                                        Distributing across {Object.keys(summary?.countries || {}).length} nodes
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Top Nodes List (Slim Version) */}
-                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-4">
+                        {/* Node Ranking List */}
+                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-6">
                             {Object.entries(summary?.countries || {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([code, count], i) => (
-                                <div key={i} className="flex flex-col gap-1 border-l-2 border-purple-500/20 pl-3 py-1">
+                                <div key={i} className="flex flex-col gap-2 group cursor-default">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px]">{getFlagEmoji(code)}</span>
-                                        <span className="text-[10px] font-black text-white/60 tracking-tighter">{code}</span>
+                                        <span className="text-sm group-hover:scale-110 transition-transform">{getFlagEmoji(code)}</span>
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{code} Cluster</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg font-black text-white italic">{count}</span>
-                                        <span className="text-[8px] font-bold text-white/20 uppercase">Hits</span>
+                                    <div className="flex items-end gap-2">
+                                        <span className="text-3xl font-black text-white italic tracking-tighter leading-none">{count}</span>
+                                        <span className="text-[10px] font-bold text-purple-500/60 uppercase mb-1">Impact</span>
+                                    </div>
+                                    <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-purple-600 to-pink-500"
+                                            style={{ width: `${Math.min((count / summary.totalVisits) * 100, 100)}%` }}
+                                        />
                                     </div>
                                 </div>
                             ))}
