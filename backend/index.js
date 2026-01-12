@@ -720,10 +720,24 @@ app.delete('/api/admin/connections/purge/all', async (req, res) => {
 
     try {
         memoryStore.connections.clear();
-        await prisma.connection.deleteMany({});
+
+        try {
+            // Transactional cleanup to ensure child records go first
+            await prisma.$transaction([
+                prisma.responseHistory.deleteMany({}),
+                prisma.visitorLog.deleteMany({ where: { connectionId: { not: null } } }),
+                prisma.connection.deleteMany({})
+            ]);
+        } catch (dbErr) {
+            console.warn('[DB] Bulk purge failed, falling back to connection-only wipe:', dbErr.message);
+            // If the above fails (e.g. table doesn't exist in fallback), try just connections
+            await prisma.connection.deleteMany({});
+        }
+
         io.emit('session-terminated', { message: "System-wide session purge performed by Administrator." });
         res.json({ success: true, message: "All connections purged" });
     } catch (err) {
+        console.error('[PURGE] Global Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -737,7 +751,6 @@ app.delete('/api/admin/connections/purge/dead', async (req, res) => {
         const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
 
         // Find connections that are older than 15 mins AND have 0 visitor logs
-        // This is a rough heuristic for "clicked and abandoned"
         const deadConns = await prisma.connection.findMany({
             where: {
                 createdAt: { lt: fifteenMinsAgo },
@@ -745,18 +758,22 @@ app.delete('/api/admin/connections/purge/dead', async (req, res) => {
             }
         });
 
+        if (deadConns.length === 0) return res.json({ success: true, count: 0 });
+
+        const deadIds = deadConns.map(c => c.id);
+
         for (const conn of deadConns) {
             memoryStore.connections.delete(conn.slug);
         }
 
-        const result = await prisma.connection.deleteMany({
-            where: {
-                id: { in: deadConns.map(c => c.id) }
-            }
-        });
+        await prisma.$transaction([
+            prisma.responseHistory.deleteMany({ where: { connectionId: { in: deadIds } } }),
+            prisma.connection.deleteMany({ where: { id: { in: deadIds } } })
+        ]);
 
-        res.json({ success: true, count: result.count });
+        res.json({ success: true, count: deadIds.length });
     } catch (err) {
+        console.error('[PURGE] Dead Sessions Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
