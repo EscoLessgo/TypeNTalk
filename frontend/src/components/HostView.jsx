@@ -23,7 +23,13 @@ export default function HostView() {
     const [pairingCode, setPairingCode] = useState('');
     const [customName, setCustomName] = useState(localStorage.getItem('host_custom_name') || '');
     const [typists, setTypists] = useState([]);
-    const [toys, setToys] = useState({});
+    const [toys, setToys] = useState(() => {
+        const user = JSON.parse(localStorage.getItem('sync_user') || 'null');
+        if (user && user.toys) {
+            try { return JSON.parse(user.toys); } catch (e) { return {}; }
+        }
+        return {};
+    });
     const [slug, setSlug] = useState('');
     const [linkedUid, setLinkedUid] = useState('');
     const [error, setError] = useState(null);
@@ -299,7 +305,9 @@ export default function HostView() {
         if (!isSocketConnected) return;
 
         const savedUid = currentUser?.uid || localStorage.getItem('lovense_uid');
-        if (savedUid && status === 'setup' && !restorationAttempted.current) {
+        const shouldSkip = sessionStorage.getItem('skip_restore') === 'true';
+
+        if (savedUid && status === 'setup' && !restorationAttempted.current && !shouldSkip) {
             console.log('[SESSION] Restoring host session:', savedUid);
             restorationAttempted.current = true;
             setCustomName(savedUid);
@@ -317,7 +325,12 @@ export default function HostView() {
             };
             restore();
         }
-    }, [isSocketConnected, status, currentUser]);
+
+        // Clear the skip flag if we are now connected or just finished checking
+        if (shouldSkip && status === 'setup') {
+            console.log('[SESSION] Skip restore flag detected. Staying on setup.');
+        }
+    }, [isSocketConnected, currentUser]); // Removed 'status' to prevent re-triggering restoration within same cycle
 
     useEffect(() => {
         // Only auto-skip to connected if we have a slug AND toys are linked
@@ -353,6 +366,7 @@ export default function HostView() {
         setError(null);
         setTestSuccess(false);
         setLinkedUid('');
+        sessionStorage.removeItem('skip_restore'); // Allow restoration again after manual start
         setCustomName(uniqueId);
         localStorage.setItem('lovense_uid', uniqueId);
 
@@ -397,6 +411,10 @@ export default function HostView() {
         }
         localStorage.removeItem('lovense_uid');
         localStorage.removeItem('host_custom_name');
+
+        // Prevent auto-restore on the next page load
+        sessionStorage.setItem('skip_restore', 'true');
+
         window.location.assign(window.location.pathname);
     };
 
@@ -407,6 +425,10 @@ export default function HostView() {
             setSlug('');
             slugRef.current = '';
             setStatus('setup');
+
+            // Also set local flag to prevent effect from re-running (though ref check handles this)
+            sessionStorage.setItem('skip_restore', 'true');
+
             setApiFeedback({ success: true, message: "SESSION TERMINATED. LINK DESTROYED." });
             setTimeout(() => setApiFeedback(null), 3000);
         }
@@ -500,6 +522,8 @@ export default function HostView() {
 
     const logout = () => {
         setCurrentUser(null);
+        setToys({});
+        setLinkedUid('');
         localStorage.removeItem('sync_user');
         setApiFeedback({ success: true, message: 'Logged out successfully.' });
         setTimeout(() => setApiFeedback(null), 2000);
@@ -512,6 +536,18 @@ export default function HostView() {
                 avatar: currentUser.avatar || '',
                 vanitySlug: currentUser.vanitySlug || ''
             });
+
+            // Re-hydrate toys from profile if not already set by a fresh scan
+            if (currentUser.toys && Object.keys(toys).length === 0) {
+                try {
+                    const parsed = JSON.parse(currentUser.toys);
+                    if (Object.keys(parsed).length > 0) {
+                        setToys(parsed);
+                    }
+                } catch (e) {
+                    console.error('[PROFILE] Failed to parse toys from profile:', e);
+                }
+            }
         }
     }, [currentUser]);
 
