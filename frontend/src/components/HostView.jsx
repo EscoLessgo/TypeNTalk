@@ -25,6 +25,7 @@ export default function HostView() {
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState({});
     const [slug, setSlug] = useState('');
+    const [linkedUid, setLinkedUid] = useState('');
     const [error, setError] = useState(null);
     const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
     const [copied, setCopied] = useState(false);
@@ -45,6 +46,7 @@ export default function HostView() {
     const [shouldShake, setShouldShake] = useState(false);
     const [latency, setLatency] = useState(0);
     const [isOverdrive, setIsOverdrive] = useState(false);
+    const [testSuccess, setTestSuccess] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('sync_user') || 'null'));
     const [hostProfile, setHostProfile] = useState(null);
@@ -82,9 +84,12 @@ export default function HostView() {
 
         socket.on('lovense:linked', (data = {}) => {
             console.log('[SOCKET] Lovense linked received:', data);
-            const { toys } = data;
+            const { toys, uid } = data;
             if (!toys) return;
             setToys(toys);
+
+            const activeId = uid || (customNameRef.current || '').trim().toLowerCase();
+            setLinkedUid(activeId);
 
             setStatus(prev => {
                 // Prevent booting the user back to verification if they are already in the dashboard
@@ -96,7 +101,7 @@ export default function HostView() {
             });
 
             // Link is already created/reset in startSession, but we refresh it here to be safe
-            createLink((customNameRef.current || '').trim().toLowerCase());
+            createLink(activeId);
         });
 
         socket.on('approval-request', (data = {}) => {
@@ -133,6 +138,12 @@ export default function HostView() {
 
             if (finalLevel > 40 && !isMuted) {
                 playSubtleSound();
+            }
+
+            if (source === 'test') {
+                setTestSuccess(true);
+                setApiFeedback({ success: true, message: "✓ VIBRATION CONFIRMED!" });
+                setTimeout(() => setApiFeedback(null), 3000);
             }
 
             setTimeout(() => setIntensity(prev => Math.max(0, prev - 20)), 150);
@@ -340,6 +351,8 @@ export default function HostView() {
 
         setIsLoading(true);
         setError(null);
+        setTestSuccess(false);
+        setLinkedUid('');
         setCustomName(uniqueId);
         localStorage.setItem('lovense_uid', uniqueId);
 
@@ -533,7 +546,7 @@ export default function HostView() {
 
     const testVibration = () => {
         setApiFeedback({ success: true, message: "REQUESTING TEST VIBRATION..." });
-        socket.emit('test-toy', { uid: customName });
+        socket.emit('test-toy', { uid: linkedUid || customName });
         setTimeout(() => setApiFeedback(null), 2000);
     };
 
@@ -1132,15 +1145,50 @@ export default function HostView() {
                             <div className="w-full space-y-4">
                                 <button
                                     onClick={testVibration}
-                                    className="w-full py-8 bg-white/5 border-2 border-white/10 text-white rounded-3xl text-xl font-black tracking-[0.2em] uppercase flex items-center justify-center gap-4 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all group"
+                                    className={`w-full py-8 border-2 rounded-3xl text-xl font-black tracking-[0.2em] uppercase flex items-center justify-center gap-4 transition-all group ${testSuccess ? 'bg-green-500/10 border-green-500 text-green-400' : 'bg-white/5 border-white/10 text-white hover:border-yellow-500/50 hover:bg-yellow-500/5'}`}
                                 >
-                                    <Zap size={32} className="text-yellow-400 group-hover:scale-125 transition-transform" /> TEST VIBRATION
+                                    {testSuccess ? (
+                                        <>
+                                            <Check size={32} className="text-green-500 animate-bounce" />
+                                            CONNECTION VERIFIED
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Zap size={32} className="text-yellow-400 group-hover:scale-125 transition-transform" />
+                                            TEST VIBRATION
+                                        </>
+                                    )}
                                 </button>
 
                                 <p className="text-[9px] text-center text-white/20 uppercase font-black italic">
                                     Click the button above. If your toy vibrates, you are 100% connected.
                                 </p>
                             </div>
+
+                            {/* Share Link Early */}
+                            {slug && (
+                                <div className="w-full p-6 bg-purple-500/5 border border-purple-500/20 rounded-3xl space-y-4">
+                                    <div className="text-center">
+                                        <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Share Link with Partner</h3>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 bg-black/40 p-3 rounded-xl border border-white/5 text-[10px] font-mono text-white/60 truncate">
+                                            {window.location.host}/{currentUser?.vanitySlug === slug ? 'h' : 't'}/{slug}
+                                        </code>
+                                        <button
+                                            onClick={() => {
+                                                const path = currentUser?.vanitySlug === slug ? 'h' : 't';
+                                                navigator.clipboard.writeText(`${window.location.origin}/${path}/${slug}`);
+                                                setCopied(true);
+                                                setTimeout(() => setCopied(false), 2000);
+                                            }}
+                                            className="p-3 bg-purple-600 hover:bg-purple-500 rounded-xl transition-colors"
+                                        >
+                                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="w-full pt-6 border-t border-white/5 relative z-50">
                                 {partnerPresent && (

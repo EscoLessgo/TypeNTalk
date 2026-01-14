@@ -31,8 +31,8 @@ const memoryStore = {
 async function getHost(uid) {
     if (!uid) return null;
     try {
-        // Find by Lovense UID or Vanity Slug
-        const host = await prisma.host.findFirst({
+        // 1. Direct match (UID or Vanity)
+        let host = await prisma.host.findFirst({
             where: {
                 OR: [
                     { uid },
@@ -40,12 +40,25 @@ async function getHost(uid) {
                 ]
             }
         });
+
+        // 2. Prefix match (if search term is "voee", find "voee_123")
+        if (!host) {
+            host = await prisma.host.findFirst({
+                where: {
+                    uid: { startsWith: `${uid}_` }
+                },
+                orderBy: { id: 'desc' } // Prisma usually increments IDs, but updatedAt or createdAt would be better if they existed consistently.
+            });
+        }
+
         if (host) {
             if (typeof host.toys === 'string') host.toys = JSON.parse(host.toys);
             if (typeof host.settings === 'string') host.settings = JSON.parse(host.settings);
             return host;
         }
-    } catch (e) { }
+    } catch (e) {
+        console.error('[getHost] Error:', e);
+    }
     return memoryStore.hosts.get(uid);
 }
 
@@ -386,12 +399,23 @@ app.post('/api/lovense/callback', async (req, res) => {
             memoryStore.hosts.set(uid, { uid, toys: JSON.stringify(toys), username: uid, id: `mem-${uid}` });
         }
 
-        io.to(`host:${uid}`).emit('api-feedback', {
+        const feedback = {
             success: true,
             message: '✓ LINK SUCCESSFUL! APP CONNECTED TO SERVER.',
             url: 'callback'
-        });
-        io.to(`host:${uid}`).emit('lovense:linked', { toys });
+        };
+
+        // Emit to full UID and any prefixes (to handle random suffixes)
+        const parts = uid.split('_');
+        io.to(`host:${uid}`).emit('api-feedback', feedback);
+        io.to(`host:${uid}`).emit('lovense:linked', { uid, toys });
+
+        if (parts.length > 1) {
+            const prefix = parts[0];
+            console.log(`[CALLBACK] Also emitting to prefix room host:${prefix}`);
+            io.to(`host:${prefix}`).emit('api-feedback', feedback);
+            io.to(`host:${prefix}`).emit('lovense:linked', { uid, toys });
+        }
     }
 
     res.json({ result: true });
