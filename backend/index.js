@@ -308,7 +308,7 @@ function enqueueGlobalRequest(task) {
 
 // Host: Get QR for linking toy
 app.get('/api/lovense/qr', async (req, res) => {
-    const { username } = req.query;
+    const username = (req.query.username || '').toLowerCase().trim();
     if (!username) return res.status(400).json({ error: 'Username required' });
 
     // Return cached QR if available (expires in 10 mins)
@@ -384,7 +384,8 @@ app.get('/api/lovense/qr', async (req, res) => {
 // Lovense Callback
 app.post('/api/lovense/callback', async (req, res) => {
     console.log('Lovense Callback:', JSON.stringify(req.body, null, 2));
-    const { uid, toys } = req.body;
+    const { uid: rawUid, toys } = req.body;
+    const uid = (rawUid || '').toLowerCase().trim();
 
     if (uid) {
         console.log(`[CALLBACK] Successful link for UID: ${uid}`);
@@ -424,7 +425,8 @@ app.post('/api/lovense/callback', async (req, res) => {
 // Create Connection Link
 app.post('/api/connections/create', async (req, res) => {
     try {
-        const { uid } = req.body;
+        const { uid: rawUid } = req.body;
+        const uid = (rawUid || '').toLowerCase().trim();
         if (!uid) return res.status(400).json({ error: 'Host UID required' });
 
         let host;
@@ -1025,7 +1027,8 @@ io.on('connection', (socket) => {
         sendCommand(uid, 'vibrate', Math.floor(parseInt(level) / 5), 1);
     });
 
-    socket.on('set-preset', ({ uid, preset }) => {
+    socket.on('set-preset', ({ uid: rawUid, preset }) => {
+        const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[PRESET] Host ${uid} set preset to ${preset}`);
 
         // Clear existing preset for this host
@@ -1067,8 +1070,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('test-toy', async ({ uid }) => {
-        const targetUid = uid || socket.uid;
+    socket.on('test-toy', async ({ uid: rawUid }) => {
+        const targetUid = (rawUid || socket.uid || '').toLowerCase().trim();
         console.log(`[TEST-TOY] Direct test requested for UID: ${targetUid}`);
         socket.emit('api-feedback', {
             success: true,

@@ -64,9 +64,10 @@ export default function HostView() {
 
     const customNameRef = useRef(customName);
     useEffect(() => {
-        customNameRef.current = customName;
-        if (customName) {
-            localStorage.setItem('host_custom_name', customName);
+        const clean = customName.trim().toLowerCase();
+        customNameRef.current = clean;
+        if (clean) {
+            localStorage.setItem('host_custom_name', clean);
         }
     }, [customName]);
 
@@ -89,24 +90,23 @@ export default function HostView() {
         trackAnalytics();
 
         socket.on('lovense:linked', (data = {}) => {
-            console.log('[SOCKET] Lovense linked received:', data);
-            const { toys, uid } = data;
-            if (!toys) return;
-            setToys(toys);
+            console.log('[SIGNAL] Hardware link signal received:', data);
+            const { toys: incomingToys, uid } = data;
 
-            const activeId = uid || (customNameRef.current || '').trim().toLowerCase();
+            // Proceed even if toys count is 0, so the host isn't "hung"
+            // They can then use the manual "Vibration Test" or "Refresh" button
+            const activeToys = incomingToys || {};
+            setToys(activeToys);
+
+            const activeId = (uid || customNameRef.current || '').trim().toLowerCase();
             setLinkedUid(activeId);
+            console.log(`[SIGNAL] Verified session for UID: ${activeId} | Toys:`, Object.keys(activeToys).length);
 
             setStatus(prev => {
-                // Prevent booting the user back to verification if they are already in the dashboard
-                if (prev === 'connected') {
-                    console.log('[SOCKET] lovense:linked received but user is already connected. Ignoring state reset.');
-                    return prev;
-                }
+                if (prev === 'connected') return prev;
                 return 'verified';
             });
 
-            // Link is already created/reset in startSession, but we refresh it here to be safe
             createLink(activeId);
         });
 
@@ -300,44 +300,21 @@ export default function HostView() {
         }
     };
 
+    // --- PRIVACY: AUTO-RESTORE DISABLED AS REQUESTED ---
+    /* 
     const restorationAttempted = useRef(false);
     useEffect(() => {
         if (!isSocketConnected) return;
+        // Auto-reconnect logic removed for maximum privacy.
+        // User must scan QR to initiate link.
+    }, [isSocketConnected, currentUser]); 
+    */
 
-        const savedUid = currentUser?.uid || localStorage.getItem('lovense_uid');
-        const shouldSkip = sessionStorage.getItem('skip_restore') === 'true';
-
-        if (savedUid && status === 'setup' && !restorationAttempted.current && !shouldSkip) {
-            console.log('[SESSION] Restoring host session:', savedUid);
-            restorationAttempted.current = true;
-            setCustomName(savedUid);
-            socket.emit('join-host', savedUid);
-
-            const restore = async () => {
-                setIsLoading(true);
-                try {
-                    await createLink(savedUid);
-                } catch (err) {
-                    console.error('[RESTORE] Fatal error during sync:', err);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            restore();
-        }
-
-        // Clear the skip flag if we are now connected or just finished checking
-        if (shouldSkip && status === 'setup') {
-            console.log('[SESSION] Skip restore flag detected. Staying on setup.');
-        }
-    }, [isSocketConnected, currentUser]); // Removed 'status' to prevent re-triggering restoration within same cycle
-
+    // Only auto-skip if we JUST scanned and got toys (not on page reload)
     useEffect(() => {
-        // Only auto-skip to connected if we have a slug AND toys are linked
-        // This prevents bypassing the QR verification flow
-        if (slug && status === 'setup' && !isLoading && Object.keys(toys).length > 0) {
-            console.log('[SESSION] Auto-restoring to connected state (slug + toys present)');
-            setStatus('connected');
+        if (slug && status === 'setup' && Object.keys(toys).length > 0 && !isLoading) {
+            // In Setup mode with toys? Only happens if we just scanned.
+            // But actually, we prefer explicit navigation/verified screen.
         }
     }, [slug, status, isLoading, toys]);
 
@@ -441,19 +418,16 @@ export default function HostView() {
     };
 
     const bypassHandshake = async () => {
-        const id = customName.trim().toLowerCase() || 'dev';
+        const id = (customNameRef.current || 'dev').toLowerCase().trim();
         setIsLoading(true);
         setError(null);
+        console.log(`[BYPASS] Forcing entry with ID: ${id}`);
         try {
             socket.emit('join-host', id);
-            // We set mock toys for simulation
+            setLinkedUid(id);
             setToys({ 'SIM': { name: 'SIMULATED DEVICE', type: 'Vibrate' } });
             await createLink(id);
-            if (slugRef.current) {
-                setStatus('verified'); // Move to verification screen even on bypass
-            } else {
-                throw new Error('Could not establish connection link. Backend might be down.');
-            }
+            setStatus('verified');
         } catch (err) {
             console.error('Bypass handshake error:', err);
             setError(err.message || 'Failed to enter test mode');
@@ -581,8 +555,10 @@ export default function HostView() {
     };
 
     const testVibration = () => {
+        const target = (linkedUid || customNameRef.current || '').trim().toLowerCase();
+        console.log(`[TEST] Requesting vibration for: ${target}`);
         setApiFeedback({ success: true, message: "REQUESTING TEST VIBRATION..." });
-        socket.emit('test-toy', { uid: linkedUid || customName });
+        socket.emit('test-toy', { uid: target });
         setTimeout(() => setApiFeedback(null), 2000);
     };
 
