@@ -19,6 +19,8 @@ const API_BASE = getApiBase();
 
 export default function HostView() {
     const [status, setStatus] = useState('setup'); // setup, qr, connected
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [qrDetails, setQrDetails] = useState(null);
     const [qrCode, setQrCode] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [customName, setCustomName] = useState(localStorage.getItem('host_custom_name') || '');
@@ -370,6 +372,7 @@ export default function HostView() {
             if (res.data && res.data.qr) {
                 setQrCode(res.data.qr);
                 setPairingCode(res.data.code);
+                setQrDetails(res.data); // Store full details for diagnostics
                 setStatus('qr');
             } else {
                 setError('Unexpected response from server');
@@ -1194,23 +1197,64 @@ export default function HostView() {
                                     <div className="space-y-4 mt-6">
                                         <div className="flex flex-col gap-2">
                                             <button
+                                                onClick={() => setShowDiagnostics(!showDiagnostics)}
+                                                className="text-[9px] text-purple-400/40 hover:text-purple-400 font-black uppercase tracking-widest transition-colors"
+                                            >
+                                                {showDiagnostics ? 'Hide Troubleshooting' : 'Troubleshooting / Callback Info'}
+                                            </button>
+
+                                            {showDiagnostics && (
+                                                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[9px] text-left font-mono space-y-4 animate-in fade-in slide-in-from-top-2">
+                                                    <div>
+                                                        <p className="text-white/20 uppercase mb-1">Callback URL (Verify in Portal):</p>
+                                                        <p className="text-blue-400 break-all select-all p-2 bg-black/40 rounded-lg border border-white/5 text-[10px] font-bold">
+                                                            {qrDetails?.callbackUrl || 'Detecting...'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-white/20 uppercase mb-1">Target UID:</p>
+                                                        <p className="text-white/60">{customNameRef.current}</p>
+                                                    </div>
+                                                    <div className="pt-2 border-t border-white/5">
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await axios.get(`${API_BASE}/api/lovense/recent-callbacks`);
+                                                                    setRecentSignals(res.data.slice(0, 5));
+                                                                } catch (e) { console.error(e); }
+                                                            }}
+                                                            className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white/40 uppercase tracking-widest text-[8px]"
+                                                        >
+                                                            Check Server Logs for Inbound Signals
+                                                        </button>
+                                                        {recentSignals.length > 0 && (
+                                                            <div className="mt-2 space-y-1">
+                                                                {recentSignals.map((s, i) => (
+                                                                    <div key={i} className="p-1.5 bg-black/20 rounded border border-white/5 text-[7px]">
+                                                                        <span className="text-purple-400">[{new Date(s.time).toLocaleTimeString()}]</span> Signal for: {s.body?.uid || s.body?.username || 'Unknown'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={simulateSuccess}
+                                                className="text-[9px] text-green-400/40 hover:text-green-400 font-black uppercase tracking-widest transition-colors py-2"
+                                            >
+                                                Force Simulate Link (Test)
+                                            </button>
+
+                                            <button
                                                 onClick={bypassHandshake}
                                                 disabled={isLoading}
                                                 className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
                                             >
                                                 {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
                                             </button>
-                                            <button
-                                                onClick={simulateSuccess}
-                                                className="text-[9px] text-purple-400/40 hover:text-purple-400 font-black uppercase tracking-widest transition-colors mb-2"
-                                            >
-                                                Manual Verification Test
-                                            </button>
                                         </div>
-                                        <p className="text-[8px] text-center text-white/10 uppercase tracking-widest px-4 leading-relaxed italic">
-                                            Scanning issues usually mean the Lovense App can't reach our server. <br />
-                                            Attempting to poll ID: <span className="text-white/30">{customNameRef.current || 'NONE'}</span>
-                                        </p>
                                     </div>
 
                                     <button

@@ -30,24 +30,27 @@ const memoryStore = {
 // Unified Data Access Helpers
 async function getHost(uid) {
     if (!uid) return null;
+    const flowId = uid.toLowerCase().trim();
     try {
-        // 1. Direct match (UID or Vanity)
+        // 1. Check Memory FIRST for high-velocity updates
+        const memHost = memoryStore.hosts.get(flowId);
+        if (memHost && memHost.toys) {
+            if (typeof memHost.toys === 'string') memHost.toys = JSON.parse(memHost.toys);
+            return memHost;
+        }
+
+        // 2. Direct match (UID or Vanity)
         let host = await prisma.host.findFirst({
             where: {
-                OR: [
-                    { uid },
-                    { vanitySlug: uid }
-                ]
+                OR: [{ uid: flowId }, { vanitySlug: flowId }]
             }
         });
 
-        // 2. Prefix match (if search term is "voee", find "voee_123")
+        // 3. Prefix match
         if (!host) {
             host = await prisma.host.findFirst({
-                where: {
-                    uid: { startsWith: `${uid}_` }
-                },
-                orderBy: { id: 'desc' } // Prisma usually increments IDs, but updatedAt or createdAt would be better if they existed consistently.
+                where: { uid: { startsWith: `${flowId}_` } },
+                orderBy: { id: 'desc' }
             });
         }
 
@@ -59,7 +62,7 @@ async function getHost(uid) {
     } catch (e) {
         console.error('[getHost] Error:', e);
     }
-    return memoryStore.hosts.get(uid);
+    return memoryStore.hosts.get(flowId);
 }
 
 async function getConnection(slug) {
@@ -356,8 +359,14 @@ app.get('/api/lovense/qr', async (req, res) => {
                 }, { timeout: 8000 }));
 
                 if (response.data && (response.data.result === true || response.data.result === 1)) {
-                    qrCache.set(username, { data: response.data.data, time: Date.now() });
-                    return res.json(response.data.data);
+                    // Cache the successful QR and code
+                    const qrData = {
+                        ...response.data.data,
+                        callbackUrl: process.env.LOVENSE_CALLBACK_URL || detectedCallbackUrl,
+                        domain: domain
+                    };
+                    qrCache.set(username, { data: qrData, time: Date.now() });
+                    return res.json(qrData);
                 }
 
                 // If we got a specific "IP restricted" or rate limit message, don't just fail silently
@@ -419,8 +428,23 @@ app.get('/api/lovense/callback', (req, res) => {
     res.send('Lovense callback endpoint is active. Use POST for actual toy link data.');
 });
 
+// Diagnostics for Callback
+const recentCallbacks = [];
+app.get('/api/lovense/recent-callbacks', (req, res) => {
+    res.json(recentCallbacks);
+});
+
 app.post('/api/lovense/callback', async (req, res) => {
     console.log('[CALLBACK] !!! CRITICAL SIGNAL RECEIVED !!!');
+    const logItem = {
+        time: new Date().toISOString(),
+        headers: req.headers,
+        body: req.body,
+        ip: req.ip || req.headers['x-forwarded-for']
+    };
+    recentCallbacks.unshift(logItem);
+    if (recentCallbacks.length > 20) recentCallbacks.pop();
+
     console.log('[CALLBACK] Headers:', JSON.stringify(req.headers));
     console.log('[CALLBACK] Raw Body:', JSON.stringify(req.body));
 
