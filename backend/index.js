@@ -986,10 +986,10 @@ io.on('connection', (socket) => {
         // Sync current approval status immediately
         const conn = await getConnection(slug);
         if (conn) {
-            // Only send approval-status if NOT already approved
-            // This prevents the race condition where re-joining resets an approved session
-            if (!conn.approved) {
-                socket.emit('approval-status', { approved: conn.approved });
+            // Only proactively send status if it's ALREADY approved.
+            // If it's not approved, the frontend handles the 'entry' state via checkSlug (Axios).
+            if (conn.approved) {
+                socket.emit('approval-status', { approved: true });
             }
             // Notify host that partner is here
             if (conn.host) {

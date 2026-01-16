@@ -65,17 +65,17 @@ export default function TypistView() {
         socket.on('approval-status', (data = {}) => {
             const { approved } = data;
             console.log(`[SOCKET] Approval status received: ${approved}, current status: ${status}`);
+
             if (approved === true) {
                 setStatus('connected');
+                setError(null);
             } else if (approved === false) {
-                // Only reset to entry if NOT already connected
-                // This prevents race conditions from resetting an approved session
+                // If we were waiting for approval and get 'false', it's an explicit denial.
+                // If we were connected and get 'false', the host revoked access.
                 setStatus(prev => {
-                    if (prev === 'connected') {
-                        console.log('[SOCKET] Ignoring false approval - already connected');
-                        return prev; // Don't reset if already connected
-                    }
-                    return 'entry';
+                    if (prev === 'waiting-approval') return 'denied';
+                    if (prev === 'connected') return 'entry';
+                    return prev;
                 });
             }
         });
