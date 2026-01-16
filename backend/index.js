@@ -339,7 +339,10 @@ app.get('/api/lovense/qr', async (req, res) => {
 
                 const protocol = req.headers['x-forwarded-proto'] || req.protocol;
                 const host = req.headers.host;
-                const detectedCallbackUrl = `${protocol}://${host}/api/lovense/callback`;
+
+                // Force HTTPS for the callback unless we are on localhost
+                const effectiveProtocol = (host.includes('localhost') || host.includes('127.0.0.1')) ? protocol : 'https';
+                const detectedCallbackUrl = `${effectiveProtocol}://${host}/api/lovense/callback`;
 
                 const response = await enqueueGlobalRequest(() => axios.post(`${domain}/api/lan/getQrCode`, {
                     token: token,
@@ -395,8 +398,11 @@ app.get('/api/lovense/status/:uid', async (req, res) => {
 
     try {
         const host = await getHost(uid);
-        if (!host || !host.toys) {
-            return res.json({ linked: false });
+        if (!host) {
+            return res.json({ linked: false, status: 'NO_HOST_FOUND', id: uid });
+        }
+        if (!host.toys) {
+            return res.json({ linked: false, status: 'HOST_FOUND_BUT_NO_TOYS', id: uid });
         }
         res.json({
             linked: true,
@@ -409,6 +415,10 @@ app.get('/api/lovense/status/:uid', async (req, res) => {
 });
 
 // Lovense Callback
+app.get('/api/lovense/callback', (req, res) => {
+    res.send('Lovense callback endpoint is active. Use POST for actual toy link data.');
+});
+
 app.post('/api/lovense/callback', async (req, res) => {
     console.log('[CALLBACK] Received POST from Lovense');
     console.log('[CALLBACK] Headers:', JSON.stringify(req.headers, null, 2));

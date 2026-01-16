@@ -451,6 +451,8 @@ export default function HostView() {
                 setStatus('verified');
                 createLink(res.data.uid || flowId);
                 return true;
+            } else {
+                console.log(`[POLLING] Waiting... Server reports: ${res.data.status || 'Checking'}`);
             }
         } catch (err) {
             console.warn('[POLLING] Check failed:', err.message);
@@ -601,6 +603,24 @@ export default function HostView() {
         setApiFeedback({ success: true, message: "REQUESTING TEST VIBRATION..." });
         socket.emit('test-toy', { uid: target });
         setTimeout(() => setApiFeedback(null), 2000);
+    };
+
+    const simulateSuccess = async () => {
+        const id = (customNameRef.current || '').toLowerCase().trim();
+        setIsLoading(true);
+        setApiFeedback({ success: true, message: "SIMULATING SUCCESSFUL SCAN..." });
+        try {
+            await axios.post(`${API_BASE}/api/lovense/callback`, {
+                uid: id,
+                toys: { 'SIM': { name: 'SIMULATED DEVICE', type: 'Vibrate' } }
+            });
+            // Polling or Socket will pick this up in ~3s
+        } catch (err) {
+            console.error('Simulation failed:', err);
+            setError('Manual verification failed');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const sendFeedback = (type) => {
@@ -1171,16 +1191,25 @@ export default function HostView() {
                                         <Smartphone size={20} /> Open Lovense App
                                     </a>
 
-                                    <div className="space-y-2 mt-4">
-                                        <button
-                                            onClick={bypassHandshake}
-                                            disabled={isLoading}
-                                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
-                                        >
-                                            {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
-                                        </button>
-                                        <p className="text-[8px] text-center text-white/10 uppercase tracking-widest px-4 leading-relaxed">
-                                            Only use Bypass if you are 100% sure you are connected in the Lovense App but this screen isn't updating.
+                                    <div className="space-y-4 mt-6">
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                onClick={bypassHandshake}
+                                                disabled={isLoading}
+                                                className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
+                                            >
+                                                {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
+                                            </button>
+                                            <button
+                                                onClick={simulateSuccess}
+                                                className="text-[9px] text-purple-400/40 hover:text-purple-400 font-black uppercase tracking-widest transition-colors mb-2"
+                                            >
+                                                Manual Verification Test
+                                            </button>
+                                        </div>
+                                        <p className="text-[8px] text-center text-white/10 uppercase tracking-widest px-4 leading-relaxed italic">
+                                            Scanning issues usually mean the Lovense App can't reach our server. <br />
+                                            Attempting to poll ID: <span className="text-white/30">{customNameRef.current || 'NONE'}</span>
                                         </p>
                                     </div>
 
