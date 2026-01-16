@@ -1079,20 +1079,31 @@ export default function HostView() {
                                 )}
                             </div>
 
-                            <button
-                                onClick={startSession}
-                                disabled={isLoading}
-                                className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {isLoading ? (
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        CONNECTING...
-                                    </div>
-                                ) : (
-                                    <>START PAIRING <ArrowRight size={24} /></>
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={startSession}
+                                    disabled={isLoading}
+                                    className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    {isLoading ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            CONNECTING...
+                                        </div>
+                                    ) : (
+                                        <>START PAIRING <ArrowRight size={24} /></>
+                                    )}
+                                </button>
+
+                                {isLoading && (
+                                    <button
+                                        onClick={bypassHandshake}
+                                        className="w-full py-4 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-2xl text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                                    >
+                                        ⚠️ HANGING? CLICK HERE TO BYPASS QR ⚠️
+                                    </button>
                                 )}
-                            </button>
+                            </div>
 
                             <div className="relative py-4">
                                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>

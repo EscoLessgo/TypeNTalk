@@ -50,27 +50,30 @@ async function getHost(uid) {
         }
 
         // 2. Direct match (UID or Vanity)
-        let host = await prisma.host.findFirst({
-            where: {
-                OR: [{ uid: flowId }, { vanitySlug: flowId }]
-            }
-        });
-
-        // 3. Prefix match
-        if (!host) {
-            host = await prisma.host.findFirst({
-                where: { uid: { startsWith: `${flowId}_` } },
-                orderBy: { id: 'desc' }
+        if (!isDbDisabled) {
+            let host = await prisma.host.findFirst({
+                where: {
+                    OR: [{ uid: flowId }, { vanitySlug: flowId }]
+                }
             });
-        }
 
-        if (host) {
-            if (typeof host.toys === 'string') host.toys = JSON.parse(host.toys);
-            if (typeof host.settings === 'string') host.settings = JSON.parse(host.settings);
-            return host;
+            // 3. Prefix match
+            if (!host) {
+                host = await prisma.host.findFirst({
+                    where: { uid: { startsWith: `${flowId}_` } },
+                    orderBy: { id: 'desc' }
+                });
+            }
+
+            if (host) {
+                console.log(`[DB] Found host ${flowId} in DB`);
+                if (typeof host.toys === 'string' && host.toys) host.toys = JSON.parse(host.toys);
+                if (typeof host.settings === 'string' && host.settings) host.settings = JSON.parse(host.settings);
+                return host;
+            }
         }
     } catch (e) {
-        console.error('[getHost] Error:', e);
+        console.error('[getHost] DB Error (Falling back to memory):', e.message);
     }
     return memoryStore.hosts.get(flowId);
 }
@@ -82,43 +85,42 @@ async function getConnection(slug) {
     const memConn = memoryStore.connections.get(slug);
 
     try {
-        // 1. Check if it's a regular Connection slug
-        let conn = await prisma.connection.findUnique({
-            where: { slug },
-            include: { host: true }
-        });
+        if (!isDbDisabled) {
+            // 1. Check if it's a regular Connection slug
+            let conn = await prisma.connection.findUnique({
+                where: { slug },
+                include: { host: true }
+            });
 
-        // 2. Fallback: Check if it's a Vanity Slug in the Host table
-        if (!conn) {
-            const host = await prisma.host.findUnique({ where: { vanitySlug: slug } });
-            if (host) {
-                // If vanity slug matches a host, we return a virtual connection object
-                return {
-                    id: `vanity-${host.id}`,
-                    slug: host.vanitySlug,
-                    hostId: host.id,
-                    host: host,
-                    approved: true // Vanity links are "always live" for entry, though socket rules still apply
-                };
+            // 2. Fallback: Check if it's a Vanity Slug in the Host table
+            if (!conn) {
+                const host = await prisma.host.findUnique({ where: { vanitySlug: slug } });
+                if (host) {
+                    console.log(`[DB] Mapping vanity slug ${slug} to host ${host.uid}`);
+                    return {
+                        id: `vanity-${host.id}`,
+                        slug: host.vanitySlug,
+                        hostId: host.id,
+                        host: host,
+                        approved: true
+                    };
+                }
+            }
+
+            if (conn) {
+                if (memConn) return { ...conn, approved: memConn.approved };
+                memoryStore.connections.set(slug, {
+                    slug: conn.slug,
+                    hostId: conn.hostId,
+                    hostUid: conn.host?.uid,
+                    approved: conn.approved,
+                    createdAt: conn.createdAt
+                });
+                return conn;
             }
         }
-
-        if (conn) {
-            // Merge memory status if it exists
-            if (memConn) return { ...conn, approved: memConn.approved };
-
-            // If not in memory but in DB, seed memory
-            memoryStore.connections.set(slug, {
-                slug: conn.slug,
-                hostId: conn.hostId,
-                hostUid: conn.host?.uid,
-                approved: conn.approved,
-                createdAt: conn.createdAt
-            });
-            return conn;
-        }
     } catch (e) {
-        console.error('[getConnection] Error:', e);
+        console.error('[getConnection] DB Error (Falling back to memory):', e.message);
     }
 
     if (memConn) {
@@ -184,6 +186,7 @@ app.get('/health', async (req, res) => {
 app.post('/api/auth/google', async (req, res) => {
     const { credential, lovenseUid } = req.body;
     if (!credential) return res.status(400).json({ error: 'Google credential required' });
+    if (isDbDisabled) return res.status(200).json({ success: true, host: { uid: lovenseUid || 'anon_demo', username: 'Demo User' } });
 
     try {
         const ticket = await googleClient.verifyIdToken({
@@ -248,6 +251,7 @@ app.post('/api/auth/google', async (req, res) => {
 app.post('/api/host/settings', async (req, res) => {
     const { hostId, username, avatar, vanitySlug, settings } = req.body;
     if (!hostId) return res.status(400).json({ error: 'Host ID required' });
+    if (isDbDisabled) return res.json({ success: true, message: 'Settings saved to cache' });
 
     try {
         const data = {};
@@ -490,27 +494,23 @@ app.post('/api/lovense/callback', async (req, res) => {
         toysJson = '{}';
     }
 
-    // 3. ATOMIC SYNC: DB + MEMORY
-    try {
-        const payload = {
-            uid: flowId,
-            username: flowId,
-            toys: toysJson
-        };
+    // 2. SAVE TO MEMORY FIRST (IMMEDIATE)
+    memoryStore.hosts.set(flowId, {
+        uid: flowId,
+        username: flowId,
+        toys: toysJson,
+        updatedAt: new Date()
+    });
+    console.log(`[CALLBACK] Memory update complete for: ${flowId}`);
 
-        // Update Memory FIRST (Fastest)
-        memoryStore.hosts.set(flowId, { ...payload, id: `mem-${flowId}` });
-
-        // Update DB (Persistent)
-        await prisma.host.upsert({
+    // 3. PERSIST TO DB (ASYNCHRONOUSLY)
+    if (!isDbDisabled) {
+        prisma.host.upsert({
             where: { uid: flowId },
             update: { toys: toysJson, username: flowId },
-            create: payload
-        });
-
-        console.log(`[CALLBACK] Sync complete for ${flowId}`);
-    } catch (err) {
-        console.error(`[CALLBACK] Storage failure for ${flowId}:`, err.message);
+            create: { uid: flowId, toys: toysJson, username: flowId }
+        }).then(() => console.log(`[DB] Host updated: ${flowId}`))
+            .catch(e => console.error(`[DB-ERROR] ${e.message}`));
     }
 
     // 4. BROADCAST EMISSION
@@ -543,21 +543,26 @@ app.post('/api/connections/create', async (req, res) => {
         let host;
         let existingSlug;
 
-        try {
-            host = await prisma.host.upsert({
-                where: { uid: uid },
-                update: { username: uid },
-                create: { uid: uid, username: uid }
-            });
-        } catch (dbErr) {
-            host = { uid, username: uid, id: `mem-${uid}` };
+        if (!isDbDisabled) {
+            try {
+                host = await prisma.host.upsert({
+                    where: { uid: uid },
+                    update: { username: uid },
+                    create: { uid: uid, username: uid }
+                });
+            } catch (dbErr) {
+                host = { uid, username: uid, id: `mem-${uid}` };
+                memoryStore.hosts.set(uid, host);
+            }
+        } else {
+            host = memoryStore.hosts.get(uid) || { uid, username: uid, id: `mem-${uid}` };
             memoryStore.hosts.set(uid, host);
         }
 
         // PRIORITY: If host has a vanity slug, ALWAYS use it.
         if (host.vanitySlug) {
             existingSlug = host.vanitySlug;
-        } else {
+        } else if (!isDbDisabled) {
             // SLUG REUSE: Reuse the most recent slug for this host if it exists.
             try {
                 const existing = await prisma.connection.findFirst({
@@ -573,6 +578,12 @@ app.post('/api/connections/create', async (req, res) => {
                 if (memExisting && (Date.now() - new Date(memExisting.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
                     existingSlug = memExisting.slug;
                 }
+            }
+        } else {
+            const memExisting = Array.from(memoryStore.connections.values())
+                .find(c => c.hostUid === uid);
+            if (memExisting && (Date.now() - new Date(memExisting.createdAt).getTime() < 12 * 60 * 60 * 1000)) {
+                existingSlug = memExisting.slug;
             }
         }
 
@@ -594,14 +605,16 @@ app.post('/api/connections/create', async (req, res) => {
             }
 
             // 2. DB Sync
-            try {
-                await prisma.connection.upsert({
-                    where: { slug: existingSlug },
-                    update: { approved: false },
-                    create: { slug: existingSlug, hostId: host.id, approved: false }
-                });
-            } catch (e) {
-                console.warn('[DB] Failed to sync connection in DB, but memory is updated:', e.message);
+            if (!isDbDisabled) {
+                try {
+                    await prisma.connection.upsert({
+                        where: { slug: existingSlug },
+                        update: { approved: false },
+                        create: { slug: existingSlug, hostId: host.id, approved: false }
+                    });
+                } catch (e) {
+                    console.error('[DB] Failed to sync existing connection:', e.message);
+                }
             }
 
             // 3. Notify
@@ -1029,50 +1042,56 @@ io.on('connection', (socket) => {
         console.log(`[APPROVAL] Approver UID from socket: ${approverUid}`);
 
         try {
-            // First, ensure we have the current host record
-            if (approved && approverUid) {
-                // Upsert the host with current UID
-                const currentHost = await prisma.host.upsert({
-                    where: { uid: approverUid },
-                    update: { username: approverUid },
-                    create: { uid: approverUid, username: approverUid }
-                });
+            if (!isDbDisabled) {
+                // First, ensure we have the current host record
+                if (approved && approverUid) {
+                    // Upsert the host with current UID
+                    const currentHost = await prisma.host.upsert({
+                        where: { uid: approverUid },
+                        update: { username: approverUid },
+                        create: { uid: approverUid, username: approverUid }
+                    });
 
-                // Update the connection to point to this current host
-                await prisma.connection.update({
-                    where: { slug },
-                    data: {
-                        approved: true,
-                        hostId: currentHost.id
+                    // Update the connection to point to this current host
+                    await prisma.connection.update({
+                        where: { slug },
+                        data: {
+                            approved: true,
+                            hostId: currentHost.id
+                        }
+                    });
+                    console.log(`[DB] Connection ${slug} updated: approved=true, hostId=${currentHost.id} (UID: ${approverUid})`);
+
+                    // Also update memory
+                    const memConn = memoryStore.connections.get(slug);
+                    if (memConn) {
+                        memConn.approved = true;
+                        memConn.hostId = currentHost.id;
+                        memConn.hostUid = approverUid;
                     }
-                });
-                console.log(`[DB] Connection ${slug} updated: approved=true, hostId=${currentHost.id} (UID: ${approverUid})`);
-
-                // Also update memory
-                const memConn = memoryStore.connections.get(slug);
-                if (memConn) {
-                    memConn.approved = true;
-                    memConn.hostId = currentHost.id;
-                    memConn.hostUid = approverUid;
+                } else {
+                    await prisma.connection.update({
+                        where: { slug },
+                        data: { approved }
+                    });
+                    console.log(`[DB] Approval updated for ${slug}`);
                 }
             } else {
-                await prisma.connection.update({
-                    where: { slug },
-                    data: { approved }
-                });
-                console.log(`[DB] Approval updated for ${slug}`);
+                // MEMORY ONLY FLOW
+                const memConn = memoryStore.connections.get(slug);
+                if (memConn) {
+                    memConn.approved = approved;
+                    if (approved && approverUid) memConn.hostUid = approverUid;
+                    console.log(`[MEMORY] Approval updated for ${slug}`);
+                }
             }
         } catch (e) {
-            console.error(`[DB-ERROR] Failed to update approval for ${slug}: ${e.message}`);
+            console.error(`[APPROVAL-ERROR] ${e.message}`);
+            // Fallback to memory even on error
             const memConn = memoryStore.connections.get(slug);
             if (memConn) {
                 memConn.approved = approved;
-                if (approved && approverUid) {
-                    memConn.hostUid = approverUid;
-                }
-                console.log(`[MEMORY] Approval updated for ${slug}`);
-            } else {
-                console.warn(`[WARNING] No memory connection found for ${slug} to update approval.`);
+                if (approved && approverUid) memConn.hostUid = approverUid;
             }
         }
 

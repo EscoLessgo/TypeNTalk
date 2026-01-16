@@ -254,8 +254,11 @@ export default function TypistView() {
                 console.log('[TYPIST] Status: connected');
                 setStatus('connected');
             } else {
-                console.log('[TYPIST] Status: entry');
-                setStatus('entry');
+                console.log('[TYPIST] Status: entry (preserving waiting state if applicable)');
+                setStatus(prev => {
+                    if (prev === 'waiting-approval' || prev === 'connected' || prev === 'denied') return prev;
+                    return 'entry';
+                });
             }
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
