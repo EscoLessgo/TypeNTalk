@@ -3,7 +3,8 @@ import { Component } from 'react';
 import HostView from './components/HostView';
 import TypistView from './components/TypistView';
 import AdminPortal from './components/AdminPortal';
-import { Heart, Command, Shield } from 'lucide-react';
+import MarketView from './components/MarketView';
+import { Heart, Command, Shield, BarChart2 } from 'lucide-react';
 
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null };
@@ -55,6 +56,9 @@ function App() {
               </span>
             </Link>
             <div className="flex gap-6 text-sm font-medium text-white/50">
+              <Link to="/vision" className="hover:text-purple-400 transition-colors uppercase text-[10px] font-black tracking-widest flex items-center gap-2">
+                <BarChart2 size={14} /> Vision
+              </Link>
               <Link to="/admin" className="hover:text-purple-400 transition-colors uppercase text-[10px] font-black tracking-widest flex items-center gap-2">
                 <Shield size={14} /> Admin
               </Link>
@@ -73,6 +77,7 @@ function App() {
               <Route path="/t/:slug" element={<TypistView />} />
               <Route path="/h/:slug" element={<TypistView />} />
               <Route path="/admin" element={<AdminPortal />} />
+              <Route path="/vision" element={<MarketView />} />
               {/* Catch-all for invalid URLs - shows a message with a manual link */}
               <Route path="*" element={
                 <div className="text-center p-20 space-y-6">
