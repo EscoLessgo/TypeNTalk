@@ -119,6 +119,8 @@ async function getConnection(slug) {
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 
 // Request logging for debugging
 app.use((req, res, next) => {
@@ -335,6 +337,10 @@ app.get('/api/lovense/qr', async (req, res) => {
             try {
                 console.log(`[LOVENSE] Attempting QR generation via ${domain} (Global Queue: ${globalRequestQueue.length})...`);
 
+                const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+                const host = req.headers.host;
+                const detectedCallbackUrl = `${protocol}://${host}/api/lovense/callback`;
+
                 const response = await enqueueGlobalRequest(() => axios.post(`${domain}/api/lan/getQrCode`, {
                     token: token,
                     appId: (process.env.LOVENSE_APP_ID || '').trim(),
@@ -342,7 +348,8 @@ app.get('/api/lovense/qr', async (req, res) => {
                     uname: username,
                     v: 2,
                     apiVer: 1,
-                    type: 'standard'
+                    type: 'standard',
+                    callbackUrl: process.env.LOVENSE_CALLBACK_URL || detectedCallbackUrl
                 }, { timeout: 8000 }));
 
                 if (response.data && (response.data.result === true || response.data.result === 1)) {
@@ -381,9 +388,32 @@ app.get('/api/lovense/qr', async (req, res) => {
     }
 });
 
+// Status check for polling
+app.get('/api/lovense/status/:uid', async (req, res) => {
+    const uid = (req.params.uid || '').toLowerCase().trim();
+    if (!uid) return res.status(400).json({ error: 'UID required' });
+
+    try {
+        const host = await getHost(uid);
+        if (!host || !host.toys) {
+            return res.json({ linked: false });
+        }
+        res.json({
+            linked: true,
+            toys: typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys,
+            uid: host.uid
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Lovense Callback
 app.post('/api/lovense/callback', async (req, res) => {
-    console.log('Lovense Callback:', JSON.stringify(req.body, null, 2));
+    console.log('[CALLBACK] Received POST from Lovense');
+    console.log('[CALLBACK] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[CALLBACK] Body:', JSON.stringify(req.body, null, 2));
+
     const { uid: rawUid, toys } = req.body;
     const uid = (rawUid || '').toLowerCase().trim();
 
@@ -403,19 +433,31 @@ app.post('/api/lovense/callback', async (req, res) => {
         const feedback = {
             success: true,
             message: '✓ LINK SUCCESSFUL! APP CONNECTED TO SERVER.',
-            url: 'callback'
+            url: 'callback',
+            uid,
+            toys
         };
 
-        // Emit to full UID and any prefixes (to handle random suffixes)
-        const parts = uid.split('_');
+        // 1. Emit to the exact UID
+        console.log(`[CALLBACK] Emitting to host:${uid}`);
         io.to(`host:${uid}`).emit('api-feedback', feedback);
         io.to(`host:${uid}`).emit('lovense:linked', { uid, toys });
 
-        if (parts.length > 1) {
-            const prefix = parts[0];
-            console.log(`[CALLBACK] Also emitting to prefix room host:${prefix}`);
+        // 2. Robust prefix emission (handles myname_123 -> myname)
+        const lastUnderscore = uid.lastIndexOf('_');
+        if (lastUnderscore > 0) {
+            const prefix = uid.substring(0, lastUnderscore);
+            console.log(`[CALLBACK] Also emitting to prefix room: host:${prefix}`);
             io.to(`host:${prefix}`).emit('api-feedback', feedback);
             io.to(`host:${prefix}`).emit('lovense:linked', { uid, toys });
+        }
+
+        // 3. Fallback: try very first part if multiple underscores exist
+        const parts = uid.split('_');
+        if (parts.length > 2) {
+            const firstPart = parts[0];
+            console.log(`[CALLBACK] Deep fallback emission to: host:${firstPart}`);
+            io.to(`host:${firstPart}`).emit('lovense:linked', { uid, toys });
         }
     }
 
@@ -977,7 +1019,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('host-feedback', (data = {}, ack) => {
-        const { uid, type, slug } = data;
+        const { uid: rawUid, type, slug } = data;
+        const uid = (rawUid || '').toLowerCase().trim();
         const room = `typist:${slug}`;
         const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
 
@@ -1010,7 +1053,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('host-message', (data = {}) => {
-        const { slug, text, uid } = data;
+        const { slug, text, uid: rawUid } = data;
+        const uid = (rawUid || '').toLowerCase().trim();
         if (!slug || !text) return;
 
         const room = `typist:${slug}`;
@@ -1020,7 +1064,8 @@ io.on('connection', (socket) => {
         socket.emit('api-feedback', { success: true, message: "Message Sent to Partner" });
     });
 
-    socket.on('set-base-floor', ({ uid, level }) => {
+    socket.on('set-base-floor', ({ uid: rawUid, level }) => {
+        const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
         baseFloors.set(uid, parseInt(level));
         // Trigger one pulse to show/test
@@ -1081,8 +1126,8 @@ io.on('connection', (socket) => {
         sendCommand(targetUid, 'Vibrate', 20, 6, socket);
     });
 
-    socket.on('run-diagnostics', async ({ uid }) => {
-        const targetUid = uid || socket.uid;
+    socket.on('run-diagnostics', async ({ uid: rawUid }) => {
+        const targetUid = (rawUid || socket.uid || '').toLowerCase().trim();
         const host = await getHost(targetUid);
         if (!host || !host.toys) {
             socket.emit('api-feedback', { success: false, message: 'DIAGNOSTICS: No toys linked to this ID yet. Scan the QR again!' });
@@ -1113,7 +1158,7 @@ io.on('connection', (socket) => {
             const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
             console.log(`[PULSE] Typing for ${slug} -> Host ${hostUid} (Room Size: ${roomSize}) | Status: APPROVED`);
 
-            sendCommand(conn.host.uid, 'vibrate', intensity || 9, 1);
+            sendCommand(hostUid, 'vibrate', intensity || 9, 1);
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
             console.warn(`[BLOCK] Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
@@ -1158,7 +1203,7 @@ io.on('connection', (socket) => {
             const duration = 3; // Fixed 3 seconds
 
             console.log(`[SURGE] Executing for host ${hostUid} at 100%`);
-            sendCommand(conn.host.uid, 'vibrate', surgeIntensity, duration);
+            sendCommand(hostUid, 'vibrate', surgeIntensity, duration);
             io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
 
             // Save to history
@@ -1182,7 +1227,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('host-climax', ({ uid, slug }) => {
+    socket.on('host-climax', ({ uid: rawUid, slug }) => {
+        const uid = (rawUid || '').toLowerCase().trim();
         const room = `typist:${slug}`;
         const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
         console.log(`[CLIMAX] Host ${uid} reach climax, alerting slug ${slug} (Room Size: ${roomSize})`);
@@ -1240,14 +1286,14 @@ io.on('connection', (socket) => {
             if (pattern && Array.isArray(pattern)) {
                 // Run the custom pattern
                 for (const step of pattern) {
-                    sendCommand(conn.host.uid, 'vibrate', step.intensity, step.duration);
+                    sendCommand(hostUid, 'vibrate', step.intensity, step.duration);
                     if (step.duration > 0) {
                         await new Promise(r => setTimeout(r, step.duration * 1000));
                     }
                 }
             } else {
                 // Default intense climax pattern: 10 seconds of 100% intensity
-                sendCommand(conn.host.uid, 'vibrate', 20, 10);
+                sendCommand(hostUid, 'vibrate', 20, 10);
             }
         }
     });
@@ -1256,25 +1302,24 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
 
         if (conn && conn.host && conn.approved) {
-            const uid = conn.host.uid;
-            const hostUid = uid.toLowerCase();
+            const hostUid = conn.host.uid.toLowerCase();
             console.log(`[OVERDRIVE] Host ${hostUid} via Typist ${slug} -> ${active}`);
 
-            if (presets.has(uid)) {
-                clearInterval(presets.get(uid));
-                presets.delete(uid);
+            if (presets.has(hostUid)) {
+                clearInterval(presets.get(hostUid));
+                presets.delete(hostUid);
             }
 
             if (active) {
-                sendCommand(uid, 'vibrate', 20, 2);
+                sendCommand(hostUid, 'vibrate', 20, 2);
                 const interval = setInterval(() => {
-                    sendCommand(uid, 'vibrate', 20, 2);
+                    sendCommand(hostUid, 'vibrate', 20, 2);
                     io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
                 }, 1500);
-                presets.set(uid, interval);
+                presets.set(hostUid, interval);
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
             } else {
-                sendCommand(uid, 'vibrate', 0, 1);
+                sendCommand(hostUid, 'vibrate', 0, 1);
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
             }
             io.to(`host:${hostUid}`).emit('overdrive-status', { active });

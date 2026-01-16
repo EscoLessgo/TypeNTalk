@@ -322,6 +322,19 @@ export default function HostView() {
         slugRef.current = slug;
     }, [slug]);
 
+    useEffect(() => {
+        let pollTimer;
+        if (status === 'qr') {
+            console.log('[SESSION] Starting link polling...');
+            pollTimer = setInterval(() => {
+                checkConnectionStatus();
+            }, 3000);
+        }
+        return () => {
+            if (pollTimer) clearInterval(pollTimer);
+        };
+    }, [status]);
+
     const startSession = async () => {
         const baseId = customName.trim().toLowerCase();
         if (!baseId) {
@@ -345,6 +358,7 @@ export default function HostView() {
         setLinkedUid('');
         sessionStorage.removeItem('skip_restore'); // Allow restoration again after manual start
         setCustomName(uniqueId);
+        customNameRef.current = uniqueId; // Explicitly set ref for immediate polling
         localStorage.setItem('lovense_uid', uniqueId);
 
         try {
@@ -415,6 +429,33 @@ export default function HostView() {
         navigator.clipboard.writeText(pairingCode);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const checkConnectionStatus = async (targetId) => {
+        const id = targetId || linkedUid || customNameRef.current || '';
+        if (!id) {
+            console.warn('[POLLING] No UID available yet for polling.');
+            return;
+        }
+
+        try {
+            console.log(`[POLLING] Checking status for UID: ${id}... (API_BASE: ${API_BASE})`);
+            const flowId = id.toLowerCase().trim();
+            const res = await axios.get(`${API_BASE}/api/lovense/status/${flowId}`);
+            console.log(`[POLLING] Result for ${flowId}:`, res.data);
+
+            if (res.data && res.data.linked) {
+                console.log('[POLLING] Link detected via API!', res.data);
+                setToys(res.data.toys || {});
+                setLinkedUid(res.data.uid || flowId);
+                setStatus('verified');
+                createLink(res.data.uid || flowId);
+                return true;
+            }
+        } catch (err) {
+            console.warn('[POLLING] Check failed:', err.message);
+        }
+        return false;
     };
 
     const bypassHandshake = async () => {
@@ -1113,6 +1154,15 @@ export default function HostView() {
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3">
+                                    <button
+                                        onClick={() => checkConnectionStatus()}
+                                        disabled={isLoading}
+                                        className="w-full py-5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-green-500/20 flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                                        REFRESH / CHECK CONNECTION
+                                    </button>
+
                                     <a
                                         href={`lovense://app/game?v=2&code=${pairingCode}`}
                                         target="_self"
@@ -1120,13 +1170,20 @@ export default function HostView() {
                                     >
                                         <Smartphone size={20} /> Open Lovense App
                                     </a>
-                                    <button
-                                        onClick={bypassHandshake}
-                                        disabled={isLoading}
-                                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
-                                    >
-                                        {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
-                                    </button>
+
+                                    <div className="space-y-2 mt-4">
+                                        <button
+                                            onClick={bypassHandshake}
+                                            disabled={isLoading}
+                                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/40 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all border border-white/10 disabled:opacity-50"
+                                        >
+                                            {isLoading ? 'BYPASSING...' : 'FORCE SKIP TO LINK (IF APP HANGS)'}
+                                        </button>
+                                        <p className="text-[8px] text-center text-white/10 uppercase tracking-widest px-4 leading-relaxed">
+                                            Only use Bypass if you are 100% sure you are connected in the Lovense App but this screen isn't updating.
+                                        </p>
+                                    </div>
+
                                     <button
                                         onClick={resetSession}
                                         className="w-full py-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-white transition-colors"
@@ -1260,7 +1317,7 @@ export default function HostView() {
                                         onClick={() => {
                                             const targetSlug = slug || slugRef.current;
                                             console.log(`[HOST] Sending CLIMAX signal to: ${targetSlug}`);
-                                            socket.emit('host-climax', { uid: customName, slug: targetSlug });
+                                            socket.emit('host-climax', { uid: (customNameRef.current || customName || '').toLowerCase(), slug: targetSlug });
                                             setApiFeedback({ success: true, message: "CLIMAX ALERT SENT TO PARTNER! 🔥" });
                                             setTimeout(() => setApiFeedback(null), 3000);
                                         }}
@@ -1528,7 +1585,7 @@ export default function HostView() {
                                             value={baseIntensity}
                                             onChange={(e) => {
                                                 setBaseIntensity(e.target.value);
-                                                socket.emit('set-base-floor', { uid: customName, level: e.target.value });
+                                                socket.emit('set-base-floor', { uid: (customNameRef.current || customName || '').toLowerCase(), level: e.target.value });
                                             }}
                                             className="w-full accent-purple-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
                                         />
