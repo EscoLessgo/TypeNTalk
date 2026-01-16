@@ -11,13 +11,23 @@ const { OAuth2Client } = require('google-auth-library');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-if (!process.env.DATABASE_URL) {
-    console.warn('⚠️  DATABASE_URL is not set. Using IN-MEMORY FALLBACK.');
+const dbUrlRaw = (process.env.DATABASE_URL || '').trim();
+const isDbDisabled = !dbUrlRaw || dbUrlRaw === '""' || dbUrlRaw === "''";
+
+if (isDbDisabled) {
+    console.warn('⚠️  DATABASE_URL is not set or empty. Using IN-MEMORY FALLBACK ONLY.');
 }
 
-console.log('🚀 Backend v2.1 - Legacy room fix deployed');
+console.log('🚀 Backend v2.2 - Connection Stability Update');
 
-const prisma = new PrismaClient();
+// Initialize Prisma with a dummy URL if disabled to avoid crash on undefined env var
+const prisma = new PrismaClient(isDbDisabled ? {
+    datasources: {
+        db: {
+            url: 'postgresql://dummy:dummy@localhost:5432/dummy?sslmode=disable'
+        }
+    }
+} : undefined);
 
 // Fallback Memory Store (if DB is down)
 const memoryStore = {
@@ -346,6 +356,9 @@ app.get('/api/lovense/qr', async (req, res) => {
                 // Force HTTPS for the callback unless we are on localhost
                 const effectiveProtocol = (host.includes('localhost') || host.includes('127.0.0.1')) ? protocol : 'https';
                 const detectedCallbackUrl = `${effectiveProtocol}://${host}/api/lovense/callback`;
+                const finalCallbackUrl = (process.env.LOVENSE_CALLBACK_URL || detectedCallbackUrl).trim();
+
+                console.log(`[LOVENSE] Configured Callback URL: ${finalCallbackUrl}`);
 
                 const response = await enqueueGlobalRequest(() => axios.post(`${domain}/api/lan/getQrCode`, {
                     token: token,
@@ -355,14 +368,14 @@ app.get('/api/lovense/qr', async (req, res) => {
                     v: 2,
                     apiVer: 1,
                     type: 'standard',
-                    callbackUrl: process.env.LOVENSE_CALLBACK_URL || detectedCallbackUrl
+                    callbackUrl: finalCallbackUrl
                 }, { timeout: 8000 }));
 
                 if (response.data && (response.data.result === true || response.data.result === 1)) {
                     // Cache the successful QR and code
                     const qrData = {
                         ...response.data.data,
-                        callbackUrl: process.env.LOVENSE_CALLBACK_URL || detectedCallbackUrl,
+                        callbackUrl: finalCallbackUrl,
                         domain: domain
                     };
                     qrCache.set(username, { data: qrData, time: Date.now() });
@@ -436,6 +449,10 @@ app.get('/api/lovense/recent-callbacks', (req, res) => {
 
 app.post('/api/lovense/callback', async (req, res) => {
     console.log('[CALLBACK] !!! CRITICAL SIGNAL RECEIVED !!!');
+    console.log('[CALLBACK] Source IP:', req.ip || req.headers['x-forwarded-for']);
+    console.log('[CALLBACK] Headers:', JSON.stringify(req.headers));
+    console.log('[CALLBACK] Body:', JSON.stringify(req.body));
+
     const logItem = {
         time: new Date().toISOString(),
         headers: req.headers,
@@ -444,9 +461,6 @@ app.post('/api/lovense/callback', async (req, res) => {
     };
     recentCallbacks.unshift(logItem);
     if (recentCallbacks.length > 20) recentCallbacks.pop();
-
-    console.log('[CALLBACK] Headers:', JSON.stringify(req.headers));
-    console.log('[CALLBACK] Raw Body:', JSON.stringify(req.body));
 
     // 1. EXTRACT DATA WITH MAXIMUM TOLERANCE
     let uid = req.body.uid || req.body.username || (req.body.data && req.body.data.uid);
