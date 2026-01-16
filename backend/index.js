@@ -420,58 +420,79 @@ app.get('/api/lovense/callback', (req, res) => {
 });
 
 app.post('/api/lovense/callback', async (req, res) => {
-    console.log('[CALLBACK] Received POST from Lovense');
-    console.log('[CALLBACK] Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('[CALLBACK] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[CALLBACK] !!! CRITICAL SIGNAL RECEIVED !!!');
+    console.log('[CALLBACK] Headers:', JSON.stringify(req.headers));
+    console.log('[CALLBACK] Raw Body:', JSON.stringify(req.body));
 
-    const { uid: rawUid, toys } = req.body;
-    const uid = (rawUid || '').toLowerCase().trim();
+    // 1. EXTRACT DATA WITH MAXIMUM TOLERANCE
+    let uid = req.body.uid || req.body.username || (req.body.data && req.body.data.uid);
+    let toys = req.body.toys || (req.body.data && req.body.data.toys);
 
-    if (uid) {
-        console.log(`[CALLBACK] Successful link for UID: ${uid}`);
-        try {
-            await prisma.host.upsert({
-                where: { uid: uid },
-                update: { toys: JSON.stringify(toys), username: uid },
-                create: { uid: uid, username: uid, toys: JSON.stringify(toys) }
-            });
-        } catch (dbErr) {
-            console.warn('[DB] Fallback to memory for host upsert');
-            memoryStore.hosts.set(uid, { uid, toys: JSON.stringify(toys), username: uid, id: `mem-${uid}` });
-        }
+    const flowId = (uid || '').toString().toLowerCase().trim();
 
-        const feedback = {
-            success: true,
-            message: '✓ LINK SUCCESSFUL! APP CONNECTED TO SERVER.',
-            url: 'callback',
-            uid,
-            toys
-        };
-
-        // 1. Emit to the exact UID
-        console.log(`[CALLBACK] Emitting to host:${uid}`);
-        io.to(`host:${uid}`).emit('api-feedback', feedback);
-        io.to(`host:${uid}`).emit('lovense:linked', { uid, toys });
-
-        // 2. Robust prefix emission (handles myname_123 -> myname)
-        const lastUnderscore = uid.lastIndexOf('_');
-        if (lastUnderscore > 0) {
-            const prefix = uid.substring(0, lastUnderscore);
-            console.log(`[CALLBACK] Also emitting to prefix room: host:${prefix}`);
-            io.to(`host:${prefix}`).emit('api-feedback', feedback);
-            io.to(`host:${prefix}`).emit('lovense:linked', { uid, toys });
-        }
-
-        // 3. Fallback: try very first part if multiple underscores exist
-        const parts = uid.split('_');
-        if (parts.length > 2) {
-            const firstPart = parts[0];
-            console.log(`[CALLBACK] Deep fallback emission to: host:${firstPart}`);
-            io.to(`host:${firstPart}`).emit('lovense:linked', { uid, toys });
-        }
+    if (!flowId) {
+        console.error('[CALLBACK] FATAL: No UID found in Lovense signal.');
+        return res.status(400).json({ error: 'UID not found in payload' });
     }
 
-    res.json({ result: true });
+    console.log(`[CALLBACK] Normalized UID: "${flowId}" | Processing...`);
+
+    // 2. NORMALIZE TOYS
+    let toysJson = '';
+    try {
+        if (typeof toys === 'string') {
+            toysJson = toys; // Keep as string if already stringified
+        } else if (toys) {
+            toysJson = JSON.stringify(toys);
+        } else {
+            toysJson = JSON.stringify({ 'SIM': { name: 'Linked (Awaiting Sync)', type: 'Generic' } });
+        }
+    } catch (e) {
+        console.warn('[CALLBACK] Toy stringification failed, using fallback.');
+        toysJson = '{}';
+    }
+
+    // 3. ATOMIC SYNC: DB + MEMORY
+    try {
+        const payload = {
+            uid: flowId,
+            username: flowId,
+            toys: toysJson
+        };
+
+        // Update Memory FIRST (Fastest)
+        memoryStore.hosts.set(flowId, { ...payload, id: `mem-${flowId}` });
+
+        // Update DB (Persistent)
+        await prisma.host.upsert({
+            where: { uid: flowId },
+            update: { toys: toysJson, username: flowId },
+            create: payload
+        });
+
+        console.log(`[CALLBACK] Sync complete for ${flowId}`);
+    } catch (err) {
+        console.error(`[CALLBACK] Storage failure for ${flowId}:`, err.message);
+    }
+
+    // 4. BROADCAST EMISSION
+    const feedback = {
+        success: true,
+        message: '✓ HARDWARE LINKED!',
+        uid: flowId,
+        toys: JSON.parse(toysJson)
+    };
+
+    io.to(`host:${flowId}`).emit('lovense:linked', feedback);
+    io.to(`host:${flowId}`).emit('api-feedback', feedback);
+
+    // Also emit to prefix room for older clients
+    const prefix = flowId.split('_')[0];
+    if (prefix !== flowId) {
+        io.to(`host:${prefix}`).emit('lovense:linked', feedback);
+    }
+
+    res.json({ result: true, processed: true });
 });
 
 // Create Connection Link
