@@ -1096,6 +1096,26 @@ export default function HostView() {
                                     )}
                                 </button>
 
+                                <button
+                                    onClick={async () => {
+                                        setIsLoading(true);
+                                        try {
+                                            const res = await axios.post(`${API_BASE}/api/connections/create`, {}, { timeout: 8000 });
+                                            if (res.data && res.data.slug) {
+                                                window.location.href = `/t/${res.data.slug}`;
+                                            }
+                                        } catch (err) {
+                                            setError('Failed to create control room. Please try again.');
+                                        } finally {
+                                            setIsLoading(false);
+                                        }
+                                    }}
+                                    disabled={isLoading}
+                                    className="w-full py-5 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/60"
+                                >
+                                    <Keyboard size={18} /> I am the Typist (Send Link to Host)
+                                </button>
+
                                 {isLoading && (
                                     <button
                                         onClick={bypassHandshake}

@@ -125,7 +125,7 @@ async function getConnection(slug) {
 
     if (memConn) {
         // Hydrate host for memory connection
-        const host = await getHost(memConn.hostUid);
+        const host = memConn.hostUid ? await getHost(memConn.hostUid) : null;
         return { ...memConn, host };
     }
     return null;
@@ -538,7 +538,18 @@ app.post('/api/connections/create', async (req, res) => {
     try {
         const { uid: rawUid } = req.body;
         const uid = (rawUid || '').toLowerCase().trim();
-        if (!uid) return res.status(400).json({ error: 'Host UID required' });
+
+        // Handle "Empty" creation (requested by Typist)
+        if (!uid) {
+            const slug = uuidv4().substring(0, 8);
+            memoryStore.connections.set(slug, {
+                slug,
+                approved: true, // Auto-approved for the person who joins later
+                createdAt: new Date(),
+                isTypistFirst: true
+            });
+            return res.json({ slug, isTypistFirst: true });
+        }
 
         let host;
         let existingSlug;
@@ -1000,8 +1011,7 @@ io.on('connection', (socket) => {
         const conn = await getConnection(slug);
         if (conn) {
             // Only proactively send status if it's ALREADY approved.
-            // If it's not approved, the frontend handles the 'entry' state via checkSlug (Axios).
-            if (conn.approved) {
+            if (conn.approved && conn.host) {
                 socket.emit('approval-status', { approved: true });
             }
             // Notify host that partner is here
@@ -1010,6 +1020,29 @@ io.on('connection', (socket) => {
                 console.log(`[SOCKET] Alerting Host ${hostUid} that partner joined`);
                 io.to(`host:${hostUid}`).emit('partner-joined', { slug });
             }
+        }
+    });
+
+    socket.on('host-join-session', async ({ slug, uid: rawUid }) => {
+        const uid = (rawUid || '').toLowerCase().trim();
+        if (!slug || !uid) return;
+
+        console.log(`[REVERSE-LINK] Host ${uid} claiming session ${slug}`);
+        const memConn = memoryStore.connections.get(slug);
+        if (memConn) {
+            memConn.hostUid = uid;
+            memConn.approved = true;
+
+            // Join the host to the typist room and their own host room
+            socket.join(`typist:${slug}`);
+            socket.join(`host:${uid}`);
+            socket.uid = uid;
+            hostSocketMap.set(socket.id, uid);
+
+            // Notify everyone in the room
+            io.to(`typist:${slug}`).emit('approval-status', { approved: true });
+            io.to(`typist:${slug}`).emit('partner-joined', { slug });
+            socket.emit('host:ready', { uid });
         }
     });
 

@@ -38,6 +38,12 @@ export default function TypistView() {
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
+    const [isHostRegistering, setIsHostRegistering] = useState(false);
+    const [qrCode, setQrCode] = useState('');
+    const [pairingCode, setPairingCode] = useState('');
+    const [manualId, setManualId] = useState('');
+    const [isLinking, setIsLinking] = useState(false);
+    const [copied, setCopied] = useState(false);
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -123,6 +129,20 @@ export default function TypistView() {
             console.log('[SOCKET] Session terminated by host');
             setError(data.message || 'Session ended by host.');
             setStatus('invalid');
+        });
+
+        socket.on('host:ready', (data = {}) => {
+            console.log('[SOCKET] Host Ready Signal Received:', data);
+            setIsLinking(false);
+            setIsHostRegistering(false);
+            checkSlug(); // Refresh connection data
+        });
+
+        socket.on('lovense:linked', (data = {}) => {
+            console.log('[SOCKET] Hardware Linked Signal Received');
+            setIsLinking(false);
+            setIsHostRegistering(false);
+            checkSlug(); // Refresh
         });
 
         return () => {
@@ -242,23 +262,25 @@ export default function TypistView() {
             const res = await axios.get(`${API_BASE}/api/connections/${cleanSlug}`, { timeout: 8000 });
             console.log(`[TYPIST] Connection data received:`, res.data);
 
-            if (!res.data || !res.data.host) {
+            if (!res.data) {
                 throw new Error('Malformed server response');
             }
 
-            setHostName(res.data.host.username);
-            const favs = res.data.history?.filter(h => h.isFavorite) || [];
-            setFavorites(favs);
+            if (res.data.host) {
+                setHostName(res.data.host.username);
+                const favs = res.data.history?.filter(h => h.isFavorite) || [];
+                setFavorites(favs);
 
-            if (res.data.approved) {
-                console.log('[TYPIST] Status: connected');
-                setStatus('connected');
+                if (res.data.approved) {
+                    console.log('[TYPIST] Status: connected');
+                    setStatus('connected');
+                } else {
+                    setStatus(prev => (prev === 'connected' || prev === 'denied') ? prev : 'entry');
+                }
             } else {
-                console.log('[TYPIST] Status: entry (preserving waiting state if applicable)');
-                setStatus(prev => {
-                    if (prev === 'waiting-approval' || prev === 'connected' || prev === 'denied') return prev;
-                    return 'entry';
-                });
+                console.log('[TYPIST] No host found for this connection yet.');
+                setHostName('');
+                setStatus('waiting-host');
             }
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
@@ -400,6 +422,139 @@ export default function TypistView() {
 
         if (isMicOnRef.current) requestAnimationFrame(processAudio);
     };
+
+    const startHostLinking = async () => {
+        const id = manualId.trim().toLowerCase();
+        if (!id) return;
+        setIsLinking(true);
+        try {
+            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${id}`, { timeout: 8000 });
+            if (res.data && res.data.qr) {
+                setQrCode(res.data.qr);
+                setPairingCode(res.data.code);
+                socket.emit('host-join-session', { slug, uid: id });
+            }
+        } catch (err) {
+            setError('Failed to generate pairing. Use a different Lovense ID.');
+        } finally {
+            setIsLinking(false);
+        }
+    };
+
+    if (status === 'waiting-host') {
+        const shareUrl = `${window.location.host}/t/${slug}`;
+
+        if (isHostRegistering) {
+            return (
+                <div className="max-w-md mx-auto glass p-10 rounded-[3rem] space-y-8 animate-in zoom-in-95">
+                    <div className="text-center space-y-2">
+                        <h2 className="text-2xl font-black italic uppercase tracking-tighter">I AM THE HOST</h2>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest leading-relaxed">
+                            Enter your Lovense ID to pair your toy to this session
+                        </p>
+                    </div>
+
+                    {!qrCode ? (
+                        <div className="space-y-6">
+                            <input
+                                type="text"
+                                placeholder="MANUAL LOVENSE ID..."
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-xl font-black focus:border-purple-500 outline-none uppercase transition-all"
+                                value={manualId}
+                                onChange={(e) => setManualId(e.target.value)}
+                            />
+                            <button
+                                onClick={startHostLinking}
+                                disabled={isLinking || !manualId.trim()}
+                                className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-lg font-black uppercase tracking-widest disabled:opacity-30"
+                            >
+                                {isLinking ? <RefreshCw className="animate-spin" /> : <Smartphone size={20} />}
+                                GENERATE PAIRING
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center space-y-6">
+                            <div className="p-4 bg-white rounded-3xl shadow-2xl">
+                                <img src={qrCode} alt="QR" className="w-[240px] h-[240px]" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] text-purple-400 font-black uppercase tracking-widest mb-1">Pairing Code</p>
+                                <p className="text-4xl font-mono font-black text-white tracking-[0.3em]">{pairingCode}</p>
+                            </div>
+                            <p className="text-[9px] text-white/30 uppercase font-bold text-center">
+                                Scan or enter code in Lovense Connect app.<br />
+                                This screen will auto-refresh once linked.
+                            </p>
+                            <a
+                                href={`lovense://app/game?v=2&code=${pairingCode}`}
+                                className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 text-center hover:bg-white/10"
+                            >
+                                OPEN LOVENSE CONNECT APP
+                            </a>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setIsHostRegistering(false)}
+                        className="w-full text-[9px] text-white/10 font-black uppercase tracking-widest hover:text-white transition-colors"
+                    >
+                        Wait, I am the Typist. Take me back.
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="max-w-2xl mx-auto glass p-12 rounded-[3.5rem] space-y-10 animate-in zoom-in-95 border-purple-500/20 shadow-2xl shadow-purple-500/5">
+                <div className="text-center space-y-4">
+                    <div className="p-4 bg-purple-500/10 rounded-full w-max mx-auto border border-purple-500/20">
+                        <Keyboard className="text-purple-400" size={40} />
+                    </div>
+                    <h2 className="text-4xl font-black italic text-gradient uppercase tracking-tighter">ROOM CREATED</h2>
+                    <p className="text-xs text-white/40 uppercase tracking-[0.2em] font-medium max-w-sm mx-auto leading-relaxed">
+                        Control session initiated. Send this link to your partner so they can link their hardware.
+                    </p>
+                </div>
+
+                <div className="space-y-4">
+                    <div
+                        onClick={() => {
+                            navigator.clipboard.writeText(`https://${shareUrl}`);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                        }}
+                        className="cursor-pointer group relative p-8 bg-black/40 border-2 border-white/5 hover:border-purple-500/30 rounded-[2rem] transition-all text-center"
+                    >
+                        <p className="text-[10px] text-purple-400 font-black uppercase tracking-[0.3em] mb-2 italic">Invitation Link</p>
+                        <code className="text-xs sm:text-sm font-mono text-white/80 break-all select-all font-bold">
+                            {shareUrl}
+                        </code>
+                        {copied && (
+                            <div className="absolute inset-0 bg-green-500/90 backdrop-blur-sm rounded-[2rem] flex items-center justify-center animate-in fade-in zoom-in">
+                                <span className="text-black font-black uppercase tracking-[0.5em] italic">Link Copied!</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="pt-8 border-t border-white/5 flex flex-col items-center gap-6">
+                        <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Awaiting Host...</span>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => setIsHostRegistering(true)}
+                            className="text-[10px] text-white/20 hover:text-purple-400 font-black uppercase tracking-widest underline underline-offset-4 transition-all"
+                        >
+                            Actually, I am the Host. Join this session.
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest italic">Establishing Secure LDR Tunnel...</div>;
     if (status === 'invalid') return (
