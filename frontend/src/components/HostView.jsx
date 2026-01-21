@@ -1380,6 +1380,26 @@ export default function HostView() {
                                         <p className="text-green-500 text-[8px] font-black tracking-[0.2em] uppercase mt-1">
                                             {Object.keys(toys).length} Device(s) Linked
                                         </p>
+
+                                        {Object.keys(toys).length > 0 && (
+                                            <div className="w-full space-y-2 mt-4 px-2">
+                                                {Object.entries(toys).map(([tid, t]) => (
+                                                    <div key={tid} className="flex items-center gap-3 bg-white/[0.03] border border-white/5 rounded-2xl p-3 text-left group hover:bg-white/[0.05] transition-all">
+                                                        <div className="p-2 bg-green-500/10 rounded-xl text-green-500 group-hover:scale-110 transition-transform">
+                                                            <Smartphone size={14} />
+                                                        </div>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <p className="text-[9px] font-black text-white/80 truncate uppercase tracking-tight">{t.name || 'Linked Hardware'}</p>
+                                                            <div className="flex gap-1 mt-1">
+                                                                {(t.v !== undefined ? t.v > 0 : true) && <span className="text-[7px] bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded-md font-black">VIBRATE</span>}
+                                                                {t.o > 0 && <span className="text-[7px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md font-black">OSCI</span>}
+                                                                {t.r > 0 && <span className="text-[7px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-md font-black">ROT</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex gap-2 w-full">

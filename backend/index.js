@@ -1508,25 +1508,36 @@ async function performDispatch(uid, strength, duration, directSocket) {
         const host = await getHost(uid);
         if (!host || !host.toys) {
             console.warn(`[LOVENSE] No toys linked for ${uid}, sending broadcast...`);
-            return await dispatchRaw(uid, null, 'vibrate', strength, duration, directSocket);
+            return await dispatchRaw(uid, null, 'Vibrate', strength, duration, directSocket);
         }
 
-        const toys = typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys;
+        const rawToys = typeof host.toys === 'string' ? JSON.parse(host.toys) : host.toys;
         const commands = [];
 
-        if (Array.isArray(toys)) {
-            for (const toy of toys) {
-                const tId = toy.id || toy.toyId;
-                if (tId === 'SIM' && toys.length > 1) continue;
-                commands.push(dispatchRaw(uid, tId === 'SIM' ? null : tId, 'vibrate', strength, duration, directSocket));
+        // Normalize toys into a list
+        const toyList = Array.isArray(rawToys)
+            ? rawToys
+            : Object.entries(rawToys).map(([id, info]) => ({ ...info, id }));
+
+        for (const toy of toyList) {
+            const tId = toy.id || toy.toyId;
+            if (tId === 'SIM' && toyList.length > 1) continue;
+            const toyId = tId === 'SIM' ? null : tId;
+
+            // 1. Vibration: Standard for almost all toys (Dolce, Osci, etc.)
+            // If toy has 'v' flag, or it's a known vibrator, or we don't know it yet
+            if (toy.v > 0 || (!toy.v && !toy.o && !toy.r)) {
+                commands.push(dispatchRaw(uid, toyId, 'Vibrate', strength, duration, directSocket));
             }
-        } else if (typeof toys === 'object') {
-            // Handle { "toyId": { ... } } format common in Lovense callback
-            for (const [tId, toyInfo] of Object.entries(toys)) {
-                if (tId === 'SIM' && Object.keys(toys).length > 1) continue;
-                // Use key as ID if internal property is missing
-                const actualId = toyInfo.id || toyInfo.toyId || tId;
-                commands.push(dispatchRaw(uid, actualId === 'SIM' ? null : actualId, 'vibrate', strength, duration, directSocket));
+
+            // 2. Oscillation: Specific for Osci toys
+            if (toy.o > 0 || (toy.name && toy.name.toLowerCase().includes('osci'))) {
+                commands.push(dispatchRaw(uid, toyId, 'Oscillate', strength, duration, directSocket));
+            }
+
+            // 3. Rotation: Specific for Nora toys
+            if (toy.r > 0 || (toy.name && toy.name.toLowerCase().includes('nora'))) {
+                commands.push(dispatchRaw(uid, toyId, 'Rotate', strength, duration, directSocket));
             }
         }
 
@@ -1570,18 +1581,16 @@ async function dispatchRaw(uid, toyId, command, strength, duration, directSocket
             const payload = {
                 token: token,
                 uid: uid,
-                apiVer: 1,
-                sec: duration,
-                timeSec: duration,
-                strength: finalStrength,
                 command: normalizedCmd,
-                action: `${normalizedCmd}:${finalStrength}` // Some Standard implementations use action
+                strength: finalStrength,
+                timeSec: duration,
+                apiVer: 1
             };
 
             if (appId) payload.appId = appId;
             if (toyId) payload.toyId = toyId;
 
-            console.log(`[LOVENSE] Dispatching to ${domain} for ${uid} | ${normalizedCmd}:${finalStrength}`);
+            console.log(`[LOVENSE] Dispatching to ${domain} | ${toyId || 'BROADCAST'} | ${normalizedCmd}:${finalStrength}`);
 
             const response = await enqueueGlobalRequest(() => axios.post(url, payload, { timeout: 4000 }));
             const resData = response.data || {};
