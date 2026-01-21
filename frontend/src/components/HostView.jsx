@@ -60,6 +60,7 @@ export default function HostView() {
     const [hostProfile, setHostProfile] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
     const [profileForm, setProfileForm] = useState({ username: '', avatar: '', vanitySlug: '' });
+    const [recentSignals, setRecentSignals] = useState([]);
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
