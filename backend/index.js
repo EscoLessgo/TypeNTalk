@@ -1333,7 +1333,8 @@ io.on('connection', (socket) => {
             const link = hardwareLinks.get(hostUid);
             dispatchMulti(hostUid, (intensity || 9) * 5, {
                 deviceType: link?.type || 'lovense',
-                source: 'typing'
+                source: 'typing',
+                duration: 0.06 // Shorter "hit" (60ms) for perceptible gaps between chars
             });
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
@@ -1624,7 +1625,7 @@ async function dispatchMulti(uid, intensity, options = {}) {
             joyhubQueues.set(uid, queue);
         }
 
-        const JOYHUB_COOLDOWN = 150; // ms
+        const JOYHUB_COOLDOWN = 80; // Reduced from 150ms for snappier response
         if (now - queue.lastSent < JOYHUB_COOLDOWN) {
             queue.pendingIntensity = Math.max(queue.pendingIntensity, jhIntensity);
             if (!queue.timeout) {
@@ -1636,6 +1637,7 @@ async function dispatchMulti(uid, intensity, options = {}) {
                     io.to(`host:${uid}`).emit('joyhub:vibrate', {
                         intensity: finalIntensity,
                         percentage: Math.round(finalIntensity / 2.55),
+                        duration, // Pass duration to frontend for auto-stop
                         source
                     });
 
@@ -1653,6 +1655,7 @@ async function dispatchMulti(uid, intensity, options = {}) {
         io.to(`host:${uid}`).emit('joyhub:vibrate', {
             intensity: jhIntensity,
             percentage: normIntensity,
+            duration, // Pass duration to frontend for auto-stop
             source
         });
 

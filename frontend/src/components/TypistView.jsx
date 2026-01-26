@@ -393,7 +393,7 @@ export default function TypistView() {
 
         // Visual feedback and pulse
         const now = Date.now();
-        if (now - lastPulseRef.current > 100) { // Throttling
+        if (now - lastPulseRef.current > 75) { // Throttled at 75ms for minimal latency
             let finalIntensity = typingPower;
 
             if (responseMode === 'chaotic') {
@@ -402,10 +402,13 @@ export default function TypistView() {
                 finalIntensity = Math.floor(typingPower * (0.5 + Math.sin(Date.now() / 200) * 0.5));
             }
 
-            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=${finalIntensity}`);
-            socket.emit('typing-pulse', { slug, intensity: finalIntensity });
-            setIntensity(finalIntensity * 6);
-            setTimeout(() => setIntensity(0), 100);
+            // Ensure hits are never too soft to be felt
+            const sharpenedIntensity = Math.max(finalIntensity, 4);
+
+            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=${sharpenedIntensity}`);
+            socket.emit('typing-pulse', { slug, intensity: sharpenedIntensity });
+            setIntensity(sharpenedIntensity * 6);
+            setTimeout(() => setIntensity(0), 80);
             lastPulseRef.current = now;
         }
 
