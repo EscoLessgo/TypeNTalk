@@ -7,6 +7,7 @@ import PulseParticles from './ui/PulseParticles';
 import SessionHeatmap from './ui/SessionHeatmap';
 import { GoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useJoyHub } from '../hooks/useJoyHub';
 
 const getApiBase = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -23,6 +24,8 @@ export default function HostView() {
     const [qrDetails, setQrDetails] = useState(null);
     const [qrCode, setQrCode] = useState('');
     const [pairingCode, setPairingCode] = useState('');
+    const [deviceType, setDeviceType] = useState('lovense'); // lovense, joyhub
+    const joyhub = useJoyHub();
     const [customName, setCustomName] = useState(localStorage.getItem('host_custom_name') || '');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState(() => {
@@ -1079,10 +1082,40 @@ export default function HostView() {
                                 )}
                             </div>
 
+                            <div className="space-y-4">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-white/30 text-center">Select Hardware Type</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDeviceType('lovense');
+                                            const id = (customName || '').toLowerCase();
+                                            if (id) socket.emit('set-hardware-type', { uid: id, type: 'lovense' });
+                                        }}
+                                        className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deviceType === 'lovense' ? 'border-pink-500 bg-pink-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/20'}`}
+                                    >
+                                        <Sparkles size={20} className={deviceType === 'lovense' ? 'text-pink-500' : ''} />
+                                        <span className="text-[11px] font-black uppercase tracking-tighter italic">Lovense (QR)</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDeviceType('joyhub');
+                                            const id = (customName || '').toLowerCase();
+                                            if (id) socket.emit('set-hardware-type', { uid: id, type: 'joyhub' });
+                                        }}
+                                        className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${deviceType === 'joyhub' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/20'}`}
+                                    >
+                                        <Zap size={20} className={deviceType === 'joyhub' ? 'text-purple-400' : ''} />
+                                        <span className="text-[11px] font-black uppercase tracking-tighter italic">JoyHub (BLE)</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <button
-                                onClick={startSession}
+                                onClick={deviceType === 'joyhub' ? () => setStatus('joyhub_link') : startSession}
                                 disabled={isLoading}
-                                className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full button-premium py-8 rounded-[2rem] flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-95'}`}
                             >
                                 {isLoading ? (
                                     <div className="flex items-center gap-3">
@@ -1090,7 +1123,7 @@ export default function HostView() {
                                         CONNECTING...
                                     </div>
                                 ) : (
-                                    <>START PAIRING <ArrowRight size={24} /></>
+                                    <>{deviceType === 'joyhub' ? 'SCAN FOR BLE DEVICE' : 'START PAIRING'} <ArrowRight size={24} /></>
                                 )}
                             </button>
 
@@ -1143,6 +1176,77 @@ export default function HostView() {
                                 className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
                             >
                                 <HelpCircle size={12} /> View Detailed Usage Instructions
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                status === 'joyhub_link' && (
+                    <div className="max-w-xl mx-auto">
+                        <div className="glass p-10 rounded-[2.5rem] flex flex-col items-center space-y-8 animate-in zoom-in-95">
+                            <div className="text-center space-y-2 w-full">
+                                <h2 className="text-xl font-bold italic border-b border-white/5 pb-4 uppercase">JoyHub Local Bridge</h2>
+                                <p className="text-[10px] text-white/40 uppercase tracking-widest py-2">
+                                    Connect your JoyHub-compatible device via Direct Web Bluetooth
+                                </p>
+                            </div>
+
+                            <div className="w-full space-y-6">
+                                {joyhub.isConnected ? (
+                                    <div className="p-8 bg-green-500/10 border-2 border-green-500/30 rounded-3xl text-center space-y-4">
+                                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
+                                            <Check className="text-green-400" size={32} />
+                                        </div>
+                                        <p className="text-sm font-black text-white uppercase italic">✓ JoyHub Hardware Connected</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => joyhub.vibrate(100)}
+                                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-tighter"
+                                            >
+                                                Test Pulse
+                                            </button>
+                                            <button
+                                                onClick={() => joyhub.disconnect()}
+                                                className="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-[10px] font-black uppercase"
+                                            >
+                                                Disconnect
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={async () => {
+                                            const ok = await joyhub.connect();
+                                            if (ok) {
+                                                const id = (customName || 'joyhost').toLowerCase();
+                                                socket.emit('join-host', id);
+                                                setLinkedUid(id);
+                                                setToys({ 'JOY': { name: 'JoyHub BLE Device', type: 'Vibrate' } });
+                                                await createLink(id);
+                                                setStatus('verified');
+                                            }
+                                        }}
+                                        disabled={joyhub.isConnecting}
+                                        className="w-full py-10 bg-purple-600 hover:bg-purple-500 text-white rounded-[2rem] text-xl font-black tracking-[0.2em] uppercase transition-all shadow-2xl shadow-purple-500/20 active:scale-95 disabled:opacity-50"
+                                    >
+                                        {joyhub.isConnecting ? 'SEARCHING...' : 'SCAN FOR JOYHUB'}
+                                    </button>
+                                )}
+
+                                {joyhub.error && (
+                                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
+                                        <p className="text-[10px] text-red-400 font-bold uppercase text-center">{joyhub.error}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => setStatus('setup')}
+                                className="w-full py-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-white transition-colors"
+                            >
+                                Back to Setup
                             </button>
                         </div>
                     </div>

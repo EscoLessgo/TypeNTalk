@@ -157,6 +157,9 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3001;
 const LOVENSE_URL = 'https://api.lovense.com/api/standard/v1/command';
 
+// Unified Hardware Memory Store
+const hardwareLinks = new Map(); // uid -> { type: 'lovense' | 'joyhub', toyId? }
+
 // API Routes
 app.get('/', (req, res) => {
     res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
@@ -1119,6 +1122,12 @@ io.on('connection', (socket) => {
         socket.emit('api-feedback', { success: true, message: "Message Sent to Partner" });
     });
 
+    socket.on('set-hardware-type', ({ uid, type }) => {
+        const flowId = (uid || '').toLowerCase().trim();
+        console.log(`[HARDWARE] Host ${flowId} set active hardware to: ${type}`);
+        hardwareLinks.set(flowId, { type });
+    });
+
     socket.on('set-base-floor', ({ uid: rawUid, level }) => {
         const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
@@ -1213,7 +1222,11 @@ io.on('connection', (socket) => {
             const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
             console.log(`[PULSE] Typing for ${slug} -> Host ${hostUid} (Room Size: ${roomSize}) | Status: APPROVED`);
 
-            sendCommand(hostUid, 'vibrate', intensity || 9, 1);
+            const link = hardwareLinks.get(hostUid);
+            dispatchMulti(hostUid, (intensity || 9) * 5, {
+                deviceType: link?.type || 'lovense',
+                source: 'typing'
+            });
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
             console.warn(`[BLOCK] Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
@@ -1228,7 +1241,12 @@ io.on('connection', (socket) => {
             const hostUid = conn.host.uid.toLowerCase();
             const room = `host:${hostUid}`;
             console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${hostUid}`);
-            sendCommand(conn.host.uid, 'vibrate', intensity, 1);
+
+            const link = hardwareLinks.get(hostUid);
+            dispatchMulti(hostUid, intensity * 5, {
+                deviceType: link?.type || 'lovense',
+                source: 'voice'
+            });
 
             // Send visual feedback to host
             io.to(room).emit('incoming-pulse', { source: 'voice', level: intensity });
@@ -1258,8 +1276,8 @@ io.on('connection', (socket) => {
             const duration = 3; // Fixed 3 seconds
 
             console.log(`[SURGE] Executing for host ${hostUid} at 100%`);
-            sendCommand(hostUid, 'vibrate', surgeIntensity, duration);
-            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
+            dispatchMulti(hostUid, 100, { source: 'surge' });
+            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: 20 });
 
             // Save to history
             try {
@@ -1341,14 +1359,14 @@ io.on('connection', (socket) => {
             if (pattern && Array.isArray(pattern)) {
                 // Run the custom pattern
                 for (const step of pattern) {
-                    sendCommand(hostUid, 'vibrate', step.intensity, step.duration);
+                    dispatchMulti(hostUid, step.intensity * 5, { duration: step.duration });
                     if (step.duration > 0) {
                         await new Promise(r => setTimeout(r, step.duration * 1000));
                     }
                 }
             } else {
                 // Default intense climax pattern: 10 seconds of 100% intensity
-                sendCommand(hostUid, 'vibrate', 20, 10);
+                dispatchMulti(hostUid, 100, { duration: 10 });
             }
         }
     });
@@ -1466,6 +1484,51 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
     // Immediate send if outside cooldown
     await performDispatch(uid, finalStrength, duration, directSocket);
 }
+
+/**
+ * Unified Dispatcher for Modern TypeNTalk
+ * Maps 0-100 inputs to device-specific ranges
+ */
+async function dispatchMulti(uid, intensity, options = {}) {
+    const { deviceType, duration = 1, source = 'typist' } = options;
+    const normIntensity = Math.min(Math.max(intensity, 0), 100);
+
+    // Resolve device type: Provided > Last Known > Default(lovense)
+    const existingLink = hardwareLinks.get(uid);
+    const resolvedType = deviceType || existingLink?.type || 'lovense';
+
+    if (resolvedType === 'joyhub') {
+        // JoyHub Protocol: 0-255 scale
+        const jhIntensity = Math.round(normIntensity * 2.55);
+        console.log(`[JOYHUB] ⚡ Socket Emit -> host:${uid} | ${normIntensity}% (${jhIntensity}/255)`);
+        io.to(`host:${uid}`).emit('joyhub:vibrate', {
+            intensity: jhIntensity,
+            percentage: normIntensity,
+            source
+        });
+        return { success: true, method: 'socket', target: 'browser-ble' };
+    }
+
+    // Default: Lovense Protocol (0-20 scale)
+    const lovenseIntensity = Math.round(normIntensity / 5);
+    console.log(`[LOVENSE] ☁️ API Call -> ${uid} | ${normIntensity}% (${lovenseIntensity}/20)`);
+    return await sendCommand(uid, 'vibrate', lovenseIntensity, duration);
+}
+
+// Unified Type Route
+app.post('/api/type/multi', async (req, res) => {
+    const { slug, intensity, type = 'lovense', duration = 1 } = req.body;
+    if (!slug) return res.status(400).json({ error: 'Slug required' });
+
+    const conn = await getConnection(slug);
+    if (!conn || !conn.host || !conn.approved) {
+        return res.status(403).json({ error: 'Not approved or host offline' });
+    }
+
+    const hostUid = conn.host.uid.toLowerCase();
+    const result = await dispatchMulti(hostUid, intensity, { deviceType: type, duration });
+    res.json(result);
+});
 
 async function performDispatch(uid, strength, duration, directSocket) {
     const queue = commandQueues.get(uid);
