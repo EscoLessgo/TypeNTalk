@@ -74,10 +74,18 @@ export function useJoyHub() {
         try {
             // intensity is 0-255
             const data = new Uint8Array([0xff, 0x04, 0x01, 0x00, intensity]);
-            await characteristic.writeValue(data);
+
+            // Try writeValue (modern) or writeValueWithResponse/writeValueWithoutResponse
+            if (characteristic.writeValue) {
+                await characteristic.writeValue(data);
+            } else if (characteristic.writeValueWithResponse) {
+                await characteristic.writeValueWithResponse(data);
+            }
+
             setLastIntensity(intensity);
+            if (intensity > 0) console.log(`[JOYHUB] Physically wrote intensity: ${intensity}`);
         } catch (err) {
-            console.error('[JOYHUB] Vibrate failed:', err.message);
+            console.error('[JOYHUB] Vibrate failed:', err.message || err);
         } finally {
             isWriting.current = false;
             // Short delay to let hardware breathe
@@ -98,11 +106,15 @@ export function useJoyHub() {
 
     const disconnect = useCallback(() => {
         if (device && device.gatt.connected) {
-            device.gatt.disconnect();
+            try {
+                device.gatt.disconnect();
+            } catch (e) { }
         }
         setIsConnected(false);
         setCharacteristic(null);
         setDevice(null);
+        writeQueue.current = [];
+        isWriting.current = false;
     }, [device]);
 
     // Socket Listener for Backend Commands

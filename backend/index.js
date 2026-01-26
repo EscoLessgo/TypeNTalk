@@ -1531,6 +1531,12 @@ async function dispatchMulti(uid, intensity, options = {}) {
                         percentage: Math.round(finalIntensity / 2.55),
                         source
                     });
+
+                    // Visual feedback for queued pulse
+                    io.to(`host:${uid}`).emit('incoming-pulse', {
+                        source: source,
+                        level: Math.round(finalIntensity / 12.75)
+                    });
                 }, JOYHUB_COOLDOWN - (now - queue.lastSent));
             }
             return { success: true, queued: true };
@@ -1542,6 +1548,13 @@ async function dispatchMulti(uid, intensity, options = {}) {
             percentage: normIntensity,
             source
         });
+
+        // Add visual feedback pulse for the dashboard
+        io.to(`host:${uid}`).emit('incoming-pulse', {
+            source: source,
+            level: Math.round(normIntensity / 5)
+        });
+
         return { success: true, method: 'socket', target: 'browser-ble' };
     }
 
