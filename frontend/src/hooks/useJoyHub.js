@@ -18,6 +18,7 @@ export function useJoyHub() {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState(null);
     const [lastIntensity, setLastIntensity] = useState(0);
+    const stopTimerRef = useRef(null);
 
     const connect = useCallback(async () => {
         setIsConnecting(true);
@@ -131,10 +132,23 @@ export function useJoyHub() {
             console.log('[JOYHUB] Socket Vibrate Signal:', data);
             // data.intensity is 0-255 (calculated by backend)
             vibrate(data.intensity);
+
+            // Handle duration (auto-stop)
+            if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+            if (data.duration && data.intensity > 0) {
+                const ms = data.duration * 1000;
+                stopTimerRef.current = setTimeout(() => {
+                    console.log(`[JOYHUB] Auto-stopping after ${ms}ms`);
+                    vibrate(0);
+                }, ms);
+            }
         };
 
         socket.on('joyhub:vibrate', handleVibrate);
-        return () => socket.off('joyhub:vibrate', handleVibrate);
+        return () => {
+            socket.off('joyhub:vibrate', handleVibrate);
+            if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+        };
     }, [isConnected, vibrate]);
 
     return { connect, disconnect, vibrate, isConnected, isConnecting, error, lastIntensity };

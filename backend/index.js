@@ -1267,7 +1267,8 @@ io.on('connection', (socket) => {
             const link = hardwareLinks.get(hostUid);
             dispatchMulti(hostUid, (intensity || 9) * 5, {
                 deviceType: link?.type || 'lovense',
-                source: 'typing'
+                source: 'typing',
+                duration: 0.1 // Short "hit" for typing
             });
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
@@ -1570,6 +1571,7 @@ async function dispatchMulti(uid, intensity, options = {}) {
                     io.to(`host:${uid}`).emit('joyhub:vibrate', {
                         intensity: finalIntensity,
                         percentage: Math.round(finalIntensity / 2.55),
+                        duration, // Pass duration to frontend for auto-stop
                         source
                     });
 
@@ -1587,6 +1589,7 @@ async function dispatchMulti(uid, intensity, options = {}) {
         io.to(`host:${uid}`).emit('joyhub:vibrate', {
             intensity: jhIntensity,
             percentage: normIntensity,
+            duration, // Pass duration to frontend for auto-stop
             source
         });
 
