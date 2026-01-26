@@ -91,8 +91,8 @@ export function useJoyHub() {
             console.error('[JOYHUB] Vibrate failed:', err.message || err);
         } finally {
             isWriting.current = false;
-            // Short delay to let hardware breathe
-            setTimeout(processQueue, 50);
+            // Short delay to let hardware breathe - reduced for latency
+            setTimeout(processQueue, 35);
         }
     }, [characteristic]);
 
