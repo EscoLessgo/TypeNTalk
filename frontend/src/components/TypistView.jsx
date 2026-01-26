@@ -38,6 +38,14 @@ export default function TypistView() {
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
+    const [typingPower, setTypingPower] = useState(localStorage.getItem('typing_power') ? parseInt(localStorage.getItem('typing_power')) : 10);
+    const [responseMode, setResponseMode] = useState('pulse'); // pulse, wave, chaotic
+
+    useEffect(() => {
+        if (isSocketConnected && slug && status === 'connected') {
+            socket.emit('update-typing-profile', { slug, profile: responseMode, power: typingPower });
+        }
+    }, [responseMode, typingPower, isSocketConnected, slug, status]);
 
     // WebRTC State
     const [localStream, setLocalStream] = useState(null);
@@ -236,6 +244,19 @@ export default function TypistView() {
         }
     };
 
+    // Fix: Ensure video streams attach when elements are rendered
+    useEffect(() => {
+        if (localVidRef.current && localStream) {
+            localVidRef.current.srcObject = localStream;
+        }
+    }, [localStream, camOn]);
+
+    useEffect(() => {
+        if (remoteVidRef.current && remoteStream) {
+            remoteVidRef.current.srcObject = remoteStream;
+        }
+    }, [remoteStream]);
+
     useEffect(() => {
         if (!isSocketConnected) return;
         const interval = setInterval(() => {
@@ -373,9 +394,17 @@ export default function TypistView() {
         // Visual feedback and pulse
         const now = Date.now();
         if (now - lastPulseRef.current > 100) { // Throttling
-            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=9`);
-            socket.emit('typing-pulse', { slug, intensity: 9 });
-            setIntensity(60);
+            let finalIntensity = typingPower;
+
+            if (responseMode === 'chaotic') {
+                finalIntensity = Math.floor(Math.random() * typingPower + (typingPower / 2));
+            } else if (responseMode === 'wave') {
+                finalIntensity = Math.floor(typingPower * (0.5 + Math.sin(Date.now() / 200) * 0.5));
+            }
+
+            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=${finalIntensity}`);
+            socket.emit('typing-pulse', { slug, intensity: finalIntensity });
+            setIntensity(finalIntensity * 6);
             setTimeout(() => setIntensity(0), 100);
             lastPulseRef.current = now;
         }
@@ -960,6 +989,45 @@ export default function TypistView() {
                             >
                                 FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Response Mode Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <div className="glass p-6 rounded-3xl space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Typing Power</h3>
+                            <span className="text-xs font-mono text-purple-400 font-bold">{typingPower * 5}%</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="1" max="20"
+                            value={typingPower}
+                            onChange={(e) => {
+                                setTypingPower(parseInt(e.target.value));
+                                localStorage.setItem('typing_power', e.target.value);
+                            }}
+                            className="w-full accent-purple-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between items-center text-[8px] font-black text-white/20 uppercase">
+                            <span>Gentle</span>
+                            <span>Intense</span>
+                        </div>
+                    </div>
+
+                    <div className="glass p-6 rounded-3xl space-y-4">
+                        <h3 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Response Profile</h3>
+                        <div className="flex gap-2">
+                            {['pulse', 'wave', 'chaotic'].map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setResponseMode(m)}
+                                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${responseMode === m ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>

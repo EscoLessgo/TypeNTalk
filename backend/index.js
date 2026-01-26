@@ -159,6 +159,8 @@ const LOVENSE_URL = 'https://api.lovense.com/api/standard/v1/command';
 
 // Unified Hardware Memory Store
 const hardwareLinks = new Map(); // uid -> { type: 'lovense' | 'joyhub', toyId? }
+const masterSensitivities = new Map(); // uid -> scale multiplier
+const typingProfiles = new Map(); // uid -> profile name
 
 // API Routes
 app.get('/', (req, res) => {
@@ -1143,6 +1145,26 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('set-master-sensitivity', async ({ uid: rawUid, scale, slug }) => {
+        const uid = (rawUid || '').toLowerCase().trim();
+        console.log(`[CONFIG] Master Sensitivity for ${uid} set to ${scale}x`);
+        masterSensitivities.set(uid, parseFloat(scale));
+
+        // Propagate back to typist if slug is provided
+        if (slug) {
+            io.to(`typist:${slug}`).emit('master-sensitivity-updated', { scale });
+        }
+    });
+
+    socket.on('update-typing-profile', async ({ slug, profile, power }) => {
+        const conn = await getConnection(slug);
+        if (conn && conn.host) {
+            const hostUid = conn.host.uid.toLowerCase();
+            console.log(`[PROFILE] Typist ${slug} set profile: ${profile}, power: ${power} | Net: ${hostUid}`);
+            io.to(`host:${hostUid}`).emit('typing-profile-updated', { profile, power, slug });
+        }
+    });
+
     socket.on('set-base-floor', ({ uid: rawUid, level }) => {
         const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
@@ -1513,7 +1535,11 @@ const joyhubQueues = new Map(); // uid -> { lastSent, timeout, pendingIntensity 
 
 async function dispatchMulti(uid, intensity, options = {}) {
     const { deviceType, duration = 1, source = 'typist' } = options;
-    const normIntensity = Math.min(Math.max(intensity, 0), 100);
+    const sensitivity = masterSensitivities.get(uid.toLowerCase()) || 1.0;
+
+    // Apply sensitivity scaling
+    const scaledIntensity = intensity * sensitivity;
+    const normIntensity = Math.min(Math.max(scaledIntensity, 0), 100);
 
     // Resolve device type: Provided > Last Known > Default(lovense)
     const existingLink = hardwareLinks.get(uid);
