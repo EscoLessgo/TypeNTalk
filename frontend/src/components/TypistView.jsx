@@ -6,8 +6,6 @@ import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check, 
 import TypistAvatar from './ui/TypistAvatar';
 import PulseParticles from './ui/PulseParticles';
 import { motion, AnimatePresence } from 'framer-motion';
-import MediaStage from './ui/MediaStage';
-import { Image as ImageIcon, Video as VideoIcon, Plus, Send } from 'lucide-react';
 
 const getApiBase = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -40,13 +38,14 @@ export default function TypistView() {
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [typistName, setTypistName] = useState(localStorage.getItem('typist_name') || '');
     const [latency, setLatency] = useState(0);
-    const [isHostRegistering, setIsHostRegistering] = useState(false);
-    const [qrCode, setQrCode] = useState('');
-    const [pairingCode, setPairingCode] = useState('');
-    const [manualId, setManualId] = useState('');
-    const [isLinking, setIsLinking] = useState(false);
-    const [copied, setCopied] = useState(false);
-    const [media, setMedia] = useState({ url: '', type: 'image' });
+    const [typingPower, setTypingPower] = useState(localStorage.getItem('typing_power') ? parseInt(localStorage.getItem('typing_power')) : 10);
+    const [responseMode, setResponseMode] = useState('pulse'); // pulse, wave, chaotic
+
+    useEffect(() => {
+        if (isSocketConnected && slug && status === 'connected') {
+            socket.emit('update-typing-profile', { slug, profile: responseMode, power: typingPower });
+        }
+    }, [responseMode, typingPower, isSocketConnected, slug, status]);
 
     // WebRTC State
     const [localStream, setLocalStream] = useState(null);
@@ -83,17 +82,17 @@ export default function TypistView() {
         socket.on('approval-status', (data = {}) => {
             const { approved } = data;
             console.log(`[SOCKET] Approval status received: ${approved}, current status: ${status}`);
-
             if (approved === true) {
                 setStatus('connected');
-                setError(null);
             } else if (approved === false) {
-                // If we were waiting for approval and get 'false', it's an explicit denial.
-                // If we were connected and get 'false', the host revoked access.
+                // Only reset to entry if NOT already connected
+                // This prevents race conditions from resetting an approved session
                 setStatus(prev => {
-                    if (prev === 'waiting-approval') return 'denied';
-                    if (prev === 'connected') return 'entry';
-                    return prev;
+                    if (prev === 'connected') {
+                        console.log('[SOCKET] Ignoring false approval - already connected');
+                        return prev; // Don't reset if already connected
+                    }
+                    return 'entry';
                 });
             }
         });
@@ -141,25 +140,6 @@ export default function TypistView() {
             console.log('[SOCKET] Session terminated by host');
             setError(data.message || 'Session ended by host.');
             setStatus('invalid');
-        });
-
-        socket.on('host:ready', (data = {}) => {
-            console.log('[SOCKET] Host Ready Signal Received:', data);
-            setIsLinking(false);
-            setIsHostRegistering(false);
-            checkSlug(); // Refresh connection data
-        });
-
-        socket.on('lovense:linked', (data = {}) => {
-            console.log('[SOCKET] Hardware Linked Signal Received');
-            setIsLinking(false);
-            setIsHostRegistering(false);
-            checkSlug(); // Refresh
-        });
-
-        socket.on('media-sync', (data = {}) => {
-            console.log('[SOCKET] Media Sync:', data);
-            setMedia({ url: data.mediaUrl, type: data.mediaType });
         });
 
         return () => {
@@ -264,6 +244,19 @@ export default function TypistView() {
         }
     };
 
+    // Fix: Ensure video streams attach when elements are rendered
+    useEffect(() => {
+        if (localVidRef.current && localStream) {
+            localVidRef.current.srcObject = localStream;
+        }
+    }, [localStream, camOn]);
+
+    useEffect(() => {
+        if (remoteVidRef.current && remoteStream) {
+            remoteVidRef.current.srcObject = remoteStream;
+        }
+    }, [remoteStream]);
+
     useEffect(() => {
         if (!isSocketConnected) return;
         const interval = setInterval(() => {
@@ -367,25 +360,20 @@ export default function TypistView() {
             const res = await axios.get(`${API_BASE}/api/connections/${cleanSlug}`, { timeout: 8000 });
             console.log(`[TYPIST] Connection data received:`, res.data);
 
-            if (!res.data) {
+            if (!res.data || !res.data.host) {
                 throw new Error('Malformed server response');
             }
 
-            if (res.data.host) {
-                setHostName(res.data.host.username);
-                const favs = res.data.history?.filter(h => h.isFavorite) || [];
-                setFavorites(favs);
+            setHostName(res.data.host.username);
+            const favs = res.data.history?.filter(h => h.isFavorite) || [];
+            setFavorites(favs);
 
-                if (res.data.approved) {
-                    console.log('[TYPIST] Status: connected');
-                    setStatus('connected');
-                } else {
-                    setStatus(prev => (prev === 'connected' || prev === 'denied') ? prev : 'entry');
-                }
+            if (res.data.approved) {
+                console.log('[TYPIST] Status: connected');
+                setStatus('connected');
             } else {
-                console.log('[TYPIST] No host found for this connection yet.');
-                setHostName('');
-                setStatus('waiting-host');
+                console.log('[TYPIST] Status: entry');
+                setStatus('entry');
             }
         } catch (err) {
             console.error('[TYPIST] Check link error:', err);
@@ -406,9 +394,17 @@ export default function TypistView() {
         // Visual feedback and pulse
         const now = Date.now();
         if (now - lastPulseRef.current > 100) { // Throttling
-            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=9`);
-            socket.emit('typing-pulse', { slug, intensity: 9 });
-            setIntensity(60);
+            let finalIntensity = typingPower;
+
+            if (responseMode === 'chaotic') {
+                finalIntensity = Math.floor(Math.random() * typingPower + (typingPower / 2));
+            } else if (responseMode === 'wave') {
+                finalIntensity = Math.floor(typingPower * (0.5 + Math.sin(Date.now() / 200) * 0.5));
+            }
+
+            console.log(`[TYPIST] Emitting typing-pulse: slug=${slug}, intensity=${finalIntensity}`);
+            socket.emit('typing-pulse', { slug, intensity: finalIntensity });
+            setIntensity(finalIntensity * 6);
             setTimeout(() => setIntensity(0), 100);
             lastPulseRef.current = now;
         }
@@ -527,139 +523,6 @@ export default function TypistView() {
 
         if (isMicOnRef.current) requestAnimationFrame(processAudio);
     };
-
-    const startHostLinking = async () => {
-        const id = manualId.trim().toLowerCase();
-        if (!id) return;
-        setIsLinking(true);
-        try {
-            const res = await axios.get(`${API_BASE}/api/lovense/qr?username=${id}`, { timeout: 8000 });
-            if (res.data && res.data.qr) {
-                setQrCode(res.data.qr);
-                setPairingCode(res.data.code);
-                socket.emit('host-join-session', { slug, uid: id });
-            }
-        } catch (err) {
-            setError('Failed to generate pairing. Use a different Lovense ID.');
-        } finally {
-            setIsLinking(false);
-        }
-    };
-
-    if (status === 'waiting-host') {
-        const shareUrl = `${window.location.host}/t/${slug}`;
-
-        if (isHostRegistering) {
-            return (
-                <div className="max-w-md mx-auto glass p-10 rounded-[3rem] space-y-8 animate-in zoom-in-95">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-2xl font-black italic uppercase tracking-tighter">I AM THE HOST</h2>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest leading-relaxed">
-                            Enter your Lovense ID to pair your toy to this session
-                        </p>
-                    </div>
-
-                    {!qrCode ? (
-                        <div className="space-y-6">
-                            <input
-                                type="text"
-                                placeholder="MANUAL LOVENSE ID..."
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-xl font-black focus:border-purple-500 outline-none uppercase transition-all"
-                                value={manualId}
-                                onChange={(e) => setManualId(e.target.value)}
-                            />
-                            <button
-                                onClick={startHostLinking}
-                                disabled={isLinking || !manualId.trim()}
-                                className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-lg font-black uppercase tracking-widest disabled:opacity-30"
-                            >
-                                {isLinking ? <RefreshCw className="animate-spin" /> : <Smartphone size={20} />}
-                                GENERATE PAIRING
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center space-y-6">
-                            <div className="p-4 bg-white rounded-3xl shadow-2xl">
-                                <img src={qrCode} alt="QR" className="w-[240px] h-[240px]" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] text-purple-400 font-black uppercase tracking-widest mb-1">Pairing Code</p>
-                                <p className="text-4xl font-mono font-black text-white tracking-[0.3em]">{pairingCode}</p>
-                            </div>
-                            <p className="text-[9px] text-white/30 uppercase font-bold text-center">
-                                Scan or enter code in Lovense Connect app.<br />
-                                This screen will auto-refresh once linked.
-                            </p>
-                            <a
-                                href={`lovense://app/game?v=2&code=${pairingCode}`}
-                                className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 text-center hover:bg-white/10"
-                            >
-                                OPEN LOVENSE CONNECT APP
-                            </a>
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => setIsHostRegistering(false)}
-                        className="w-full text-[9px] text-white/10 font-black uppercase tracking-widest hover:text-white transition-colors"
-                    >
-                        Wait, I am the Typist. Take me back.
-                    </button>
-                </div>
-            );
-        }
-
-        return (
-            <div className="max-w-2xl mx-auto glass p-12 rounded-[3.5rem] space-y-10 animate-in zoom-in-95 border-purple-500/20 shadow-2xl shadow-purple-500/5">
-                <div className="text-center space-y-4">
-                    <div className="p-4 bg-purple-500/10 rounded-full w-max mx-auto border border-purple-500/20">
-                        <Keyboard className="text-purple-400" size={40} />
-                    </div>
-                    <h2 className="text-4xl font-black italic text-gradient uppercase tracking-tighter">ROOM CREATED</h2>
-                    <p className="text-xs text-white/40 uppercase tracking-[0.2em] font-medium max-w-sm mx-auto leading-relaxed">
-                        Control session initiated. Send this link to your partner so they can link their hardware.
-                    </p>
-                </div>
-
-                <div className="space-y-4">
-                    <div
-                        onClick={() => {
-                            navigator.clipboard.writeText(`https://${shareUrl}`);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
-                        }}
-                        className="cursor-pointer group relative p-8 bg-black/40 border-2 border-white/5 hover:border-purple-500/30 rounded-[2rem] transition-all text-center"
-                    >
-                        <p className="text-[10px] text-purple-400 font-black uppercase tracking-[0.3em] mb-2 italic">Invitation Link</p>
-                        <code className="text-xs sm:text-sm font-mono text-white/80 break-all select-all font-bold">
-                            {shareUrl}
-                        </code>
-                        {copied && (
-                            <div className="absolute inset-0 bg-green-500/90 backdrop-blur-sm rounded-[2rem] flex items-center justify-center animate-in fade-in zoom-in">
-                                <span className="text-black font-black uppercase tracking-[0.5em] italic">Link Copied!</span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="pt-8 border-t border-white/5 flex flex-col items-center gap-6">
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Awaiting Host...</span>
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => setIsHostRegistering(true)}
-                            className="text-[10px] text-white/20 hover:text-purple-400 font-black uppercase tracking-widest underline underline-offset-4 transition-all"
-                        >
-                            Actually, I am the Host. Join this session.
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
 
     if (status === 'checking') return <div className="text-center p-20 animate-pulse text-purple-400 font-bold uppercase tracking-widest italic">Establishing Secure LDR Tunnel...</div>;
     if (status === 'invalid') return (
@@ -827,29 +690,19 @@ export default function TypistView() {
             <div className="text-center pt-8 pb-4 relative">
                 <button
                     onClick={() => setShowGuide(true)}
-                    className="absolute top-8 right-0 p-1.5 glass rounded-full text-white/40 hover:text-rose-gold transition-colors"
+                    className="absolute top-8 right-0 p-1.5 glass rounded-full text-white/40 hover:text-pink-500 transition-colors"
                 >
                     <HelpCircle size={20} />
                 </button>
 
-                <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-rose-gold/20 mb-4">
-                    <Zap className="text-rose-gold" size={12} />
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-gold/80">Synchronized Session</span>
+                <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-purple-500/20 mb-4">
+                    <Zap className="text-purple-400" size={12} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Synchronized Session</span>
                 </div>
-                <h1 className="text-5xl font-syne font-black tracking-tighter italic text-white uppercase leading-none">
+                <h1 className="text-5xl font-black tracking-tighter italic text-white uppercase leading-none">
                     <span className="text-gradient">TNT</span> SYNC
                 </h1>
             </div>
-
-            {/* Media Stage */}
-            <AnimatePresence mode="wait">
-                {media.url && (
-                    <MediaStage
-                        mediaUrl={media.url}
-                        type={media.type}
-                    />
-                )}
-            </AnimatePresence>
 
             <AnimatePresence>
                 {isClimaxRequested && (
@@ -1136,6 +989,45 @@ export default function TypistView() {
                             >
                                 FINAL SURGE <Zap size={18} className="group-hover:fill-current group-hover:animate-bounce" />
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Response Mode Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <div className="glass p-6 rounded-3xl space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Typing Power</h3>
+                            <span className="text-xs font-mono text-purple-400 font-bold">{typingPower * 5}%</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="1" max="20"
+                            value={typingPower}
+                            onChange={(e) => {
+                                setTypingPower(parseInt(e.target.value));
+                                localStorage.setItem('typing_power', e.target.value);
+                            }}
+                            className="w-full accent-purple-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between items-center text-[8px] font-black text-white/20 uppercase">
+                            <span>Gentle</span>
+                            <span>Intense</span>
+                        </div>
+                    </div>
+
+                    <div className="glass p-6 rounded-3xl space-y-4">
+                        <h3 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Response Profile</h3>
+                        <div className="flex gap-2">
+                            {['pulse', 'wave', 'chaotic'].map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setResponseMode(m)}
+                                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${responseMode === m ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>

@@ -59,6 +59,8 @@ export default function HostView() {
     const [isOverdrive, setIsOverdrive] = useState(false);
     const [testSuccess, setTestSuccess] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [masterSensitivity, setMasterSensitivity] = useState(1.0);
+    const [activeTypistProfile, setActiveTypistProfile] = useState('standard');
     const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('sync_user') || 'null'));
     const [hostProfile, setHostProfile] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
@@ -138,7 +140,11 @@ export default function HostView() {
         socket.on('incoming-pulse', (data = {}) => {
             console.log('[SOCKET] Incoming pulse:', data);
             const { source, level } = data;
-            const finalLevel = isMuted ? 0 : Math.min((level || 5) * 5, 100);
+
+            // Apply Master Sensitivity on the Host level visuals
+            const adjustedLevel = (level || 5) * masterSensitivity;
+            const finalLevel = isMuted ? 0 : Math.min(adjustedLevel * 5, 100);
+
             setIntensity(finalLevel);
             setLastAction(source || 'active');
 
@@ -205,6 +211,14 @@ export default function HostView() {
         socket.on('api-feedback', (data = {}) => {
             console.log('[SOCKET] API Feedback:', data);
             setApiFeedback(data);
+        });
+
+        socket.on('typing-profile-updated', (data = {}) => {
+            console.log('[SOCKET] Typist profile update:', data);
+            setActiveTypistProfile(data.profile);
+            const id = Date.now();
+            setNotifications(prev => [{ id, type: 'info', msg: `PARTNER SWITCHED TO: ${data.profile.toUpperCase()} MODE`, icon: 'Sliders' }, ...prev].slice(0, 3));
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
         });
 
         return () => {
@@ -307,6 +321,19 @@ export default function HostView() {
             }
         }
     };
+
+    // Fix: Ensure video streams attach when elements are rendered
+    useEffect(() => {
+        if (localVidRef.current && localStream) {
+            localVidRef.current.srcObject = localStream;
+        }
+    }, [localStream, camOn]);
+
+    useEffect(() => {
+        if (remoteVidRef.current && remoteStream) {
+            remoteVidRef.current.srcObject = remoteStream;
+        }
+    }, [remoteStream]);
 
     const [partnerPresent, setPartnerPresent] = useState(false);
     useEffect(() => {
@@ -1691,10 +1718,19 @@ export default function HostView() {
                                     )}
 
                                     {deviceType === 'joyhub' && joyhub.isConnected && (
-                                        <div className="w-full py-1 px-3 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                                            <p className="text-[7px] font-black text-purple-400 uppercase text-center">
-                                                Stay on this page to maintain BLE link
-                                            </p>
+                                        <div className="flex flex-col gap-2 w-full">
+                                            <div className="py-1 px-3 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                                                <p className="text-[7px] font-black text-purple-400 uppercase text-center">
+                                                    Stay on this page to maintain BLE link
+                                                </p>
+                                            </div>
+
+                                            <div className="py-1 px-3 bg-pink-500/10 border border-pink-500/20 rounded-full flex items-center justify-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-pink-500 animate-pulse" />
+                                                <p className="text-[7px] font-black text-pink-500 uppercase text-center">
+                                                    Partner Mode: {activeTypistProfile}
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
 
@@ -1725,6 +1761,29 @@ export default function HostView() {
                                     >
                                         🔥 I'M GONNA CUM! 🔥
                                     </button>
+                                </div>
+                            </div>
+
+                            {/* Vibration Sensitivity Master */}
+                            <div className="glass p-6 rounded-[2rem] space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Master Intensity</h3>
+                                    <span className="text-xs font-mono text-green-400 font-bold">{Math.round(masterSensitivity * 100)}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0.1" max="2.0" step="0.1"
+                                    value={masterSensitivity}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setMasterSensitivity(val);
+                                        socket.emit('set-master-sensitivity', { uid: customNameRef.current, scale: val });
+                                    }}
+                                    className="w-full accent-green-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <div className="flex justify-between items-center text-[7px] font-black text-white/20 uppercase">
+                                    <span>Gentle</span>
+                                    <span>Overdrive</span>
                                 </div>
                             </div>
 
