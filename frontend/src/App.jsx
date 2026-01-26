@@ -47,20 +47,20 @@ function App() {
       <Router>
         <div className="min-h-screen p-4 md:p-8">
           <nav className="max-w-7xl mx-auto flex justify-between items-center mb-12">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="p-2.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg shadow-purple-500/20 group-hover:rotate-12 transition-transform">
-                <Command className="text-white" size={24} />
+            <Link to="/" className="flex items-center gap-4 group">
+              <div className="p-3 bg-gradient-to-br from-[#e0a696] to-[#b88a7e] rounded-2xl shadow-lg shadow-[#e0a696]/10 group-hover:rotate-12 transition-transform duration-500">
+                <Command className="text-black" size={24} />
               </div>
-              <span className="text-xl font-bold tracking-tighter text-white">
+              <span className="text-2xl font-syne font-black tracking-tighter text-white italic">
                 VEROE.<span className="text-gradient">SYNC</span>
               </span>
             </Link>
-            <div className="flex gap-6 text-sm font-medium text-white/50">
-              <Link to="/vision" className="hover:text-purple-400 transition-colors uppercase text-[10px] font-black tracking-widest flex items-center gap-2">
-                <BarChart2 size={14} /> Vision
+            <div className="flex gap-8 text-[10px] font-black text-white/30 tracking-[0.2em] uppercase">
+              <Link to="/vision" className="hover:text-[#e0a696] transition-colors flex items-center gap-2">
+                <BarChart2 size={14} /> Intelligence
               </Link>
-              <Link to="/admin" className="hover:text-purple-400 transition-colors uppercase text-[10px] font-black tracking-widest flex items-center gap-2">
-                <Shield size={14} /> Admin
+              <Link to="/admin" className="hover:text-[#e0a696] transition-colors flex items-center gap-2">
+                <Shield size={14} /> Secure Access
               </Link>
               <button
                 onClick={() => { localStorage.clear(); window.location.reload(); }}

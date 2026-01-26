@@ -7,6 +7,8 @@ import PulseParticles from './ui/PulseParticles';
 import SessionHeatmap from './ui/SessionHeatmap';
 import { GoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
+import MediaStage from './ui/MediaStage';
+import { Image as ImageIcon, Video as VideoIcon, Plus } from 'lucide-react';
 
 const getApiBase = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -61,6 +63,9 @@ export default function HostView() {
     const [showProfile, setShowProfile] = useState(false);
     const [profileForm, setProfileForm] = useState({ username: '', avatar: '', vanitySlug: '' });
     const [recentSignals, setRecentSignals] = useState([]);
+    const [media, setMedia] = useState({ url: '', type: 'image' });
+    const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const [mediaInput, setMediaInput] = useState('');
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -193,6 +198,11 @@ export default function HostView() {
         socket.on('api-feedback', (data = {}) => {
             console.log('[SOCKET] API Feedback:', data);
             setApiFeedback(data);
+        });
+
+        socket.on('media-sync', (data = {}) => {
+            console.log('[SOCKET] Media Sync:', data);
+            setMedia({ url: data.mediaUrl, type: data.mediaType });
         });
 
         return () => {
@@ -722,6 +732,20 @@ export default function HostView() {
         } catch (e) {
             console.error('Audio playback failed:', e);
         }
+    };
+
+    const updateMedia = (url) => {
+        if (!url) return;
+        const type = url.match(/\.(mp4|webm|ogg)$/i) ? 'video' : 'image';
+        setMedia({ url, type });
+        socket.emit('media-update', { uid: (customName || linkedUid), slug, mediaUrl: url, mediaType: type });
+        setIsMediaModalOpen(false);
+        setMediaInput('');
+    };
+
+    const clearMedia = () => {
+        setMedia({ url: '', type: 'image' });
+        socket.emit('media-update', { uid: (customName || linkedUid), slug, mediaUrl: '', mediaType: 'image' });
     };
 
     return (
@@ -1387,19 +1411,19 @@ export default function HostView() {
 
             {
                 status === 'connected' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-in fade-in zoom-in-95 items-start">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
                         {/* COLUMN 1: Visuals & Core Status (Left) */}
-                        <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8 order-2 lg:order-1">
-                            <div className={`glass p-6 rounded-[2rem] border-green-500/20 relative overflow-hidden transition-all duration-500 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : 'bg-green-500/[0.02]'}`}>
+                        <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-24 order-2 lg:order-1">
+                            <div className={`glass-premium p-8 rounded-[2.5rem] relative overflow-hidden transition-all duration-700 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_80px_rgba(239,68,68,0.2)]' : 'border-rose-gold/20'}`}>
                                 <PulseParticles intensity={isOverdrive ? 100 : intensity} />
                                 <div className="flex flex-col items-center text-center space-y-4 relative z-10">
-                                    <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
-                                        <Shield className="text-green-500" size={32} />
+                                    <div className="w-20 h-20 bg-rose-gold/10 rounded-[2rem] flex items-center justify-center border border-rose-gold/20 shadow-[0_0_20px_rgba(224,166,150,0.1)]">
+                                        <Shield className="text-rose-gold" size={40} />
                                     </div>
                                     <div>
-                                        <h3 className="font-black text-2xl text-white tracking-tight text-gradient">ACTIVE</h3>
-                                        <p className="text-green-500 text-[8px] font-black tracking-[0.2em] uppercase mt-1">
-                                            {Object.keys(toys).length} Device(s) Linked
+                                        <h3 className="font-syne font-black text-3xl text-white tracking-tighter text-gradient italic">ENGAGED</h3>
+                                        <p className="text-rose-gold/60 text-[9px] font-black tracking-[0.4em] uppercase mt-2">
+                                            {Object.keys(toys).length} Device(s) Synced
                                         </p>
 
                                         {Object.keys(toys).length > 0 && (
@@ -1483,6 +1507,35 @@ export default function HostView() {
 
                         {/* COLUMN 2: Live Feeds (Center) */}
                         <div className="lg:col-span-6 space-y-6 order-1 lg:order-2">
+                            {/* Media Stage */}
+                            <AnimatePresence mode="wait">
+                                {media.url ? (
+                                    <MediaStage
+                                        key="media-stage"
+                                        mediaUrl={media.url}
+                                        type={media.type}
+                                        onClose={clearMedia}
+                                    />
+                                ) : (
+                                    <motion.div
+                                        key="media-placeholder"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="w-full aspect-video glass-premium rounded-[3rem] border-dashed border-2 border-rose-gold/20 flex flex-col items-center justify-center space-y-4 group cursor-pointer hover:border-rose-gold/40 transition-all hover:bg-rose-gold/5"
+                                        onClick={() => setIsMediaModalOpen(true)}
+                                    >
+                                        <div className="p-6 bg-rose-gold/10 rounded-full text-rose-gold group-hover:scale-110 transition-transform">
+                                            <ImageIcon size={48} />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-xl font-syne font-black text-rose-gold uppercase tracking-tighter italic">Media Stage Offline</p>
+                                            <p className="text-[10px] text-white/20 uppercase font-black tracking-widest mt-1 group-hover:text-white/40 transition-colors">Click to broadcast session media</p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
                             {/* Pending Approvals */}
                             <AnimatePresence>
                                 {typists.length > 0 && (
@@ -1785,6 +1838,73 @@ export default function HostView() {
                     </button>
                 )}
             </section>
+            {/* Media Library Modal */}
+            <AnimatePresence>
+                {isMediaModalOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsMediaModalOpen(false)}
+                            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200]"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 50 }}
+                            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl glass-premium p-10 rounded-[3rem] border border-rose-gold/30 shadow-2xl z-[201]"
+                        >
+                            <div className="absolute top-8 right-8">
+                                <button onClick={() => setIsMediaModalOpen(false)} className="text-white/20 hover:text-white">
+                                    <X size={28} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-8">
+                                <div className="text-center space-y-2">
+                                    <div className="p-4 bg-rose-gold/10 rounded-full w-max mx-auto border border-rose-gold/20">
+                                        <ImageIcon className="text-rose-gold" size={32} />
+                                    </div>
+                                    <h2 className="text-3xl font-syne font-black text-gradient uppercase italic tracking-tighter">Media Broadcast</h2>
+                                    <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Sync high-definition visuals across the tunnel</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/30 ml-2">Media Direct URL (Image or MP4)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="HTTPS://..."
+                                        value={mediaInput}
+                                        onChange={(e) => setMediaInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && updateMedia(mediaInput)}
+                                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-sm font-medium text-white/50 focus:border-rose-gold outline-none transition-all"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={() => updateMedia(mediaInput)}
+                                    disabled={!mediaInput.trim()}
+                                    className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-lg font-black disabled:opacity-20"
+                                >
+                                    BROADCAST TO STAGE <Zap size={20} />
+                                </button>
+
+                                <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
+                                    <div className="text-center p-4 rounded-3xl bg-white/[0.02] border border-white/5">
+                                        <div className="text-rose-gold mb-2 flex justify-center"><ImageIcon size={20} /></div>
+                                        <p className="text-[9px] font-black uppercase text-white/40">Images (4K/HD)</p>
+                                    </div>
+                                    <div className="text-center p-4 rounded-3xl bg-white/[0.02] border border-white/5">
+                                        <div className="text-rose-gold mb-2 flex justify-center"><VideoIcon size={20} /></div>
+                                        <p className="text-[9px] font-black uppercase text-white/40">Videos (Direct Link)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div >
     );
 }

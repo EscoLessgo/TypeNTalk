@@ -6,6 +6,8 @@ import { Mic, MicOff, Keyboard, Zap, Heart, History, Play, Shield, Info, Check, 
 import TypistAvatar from './ui/TypistAvatar';
 import PulseParticles from './ui/PulseParticles';
 import { motion, AnimatePresence } from 'framer-motion';
+import MediaStage from './ui/MediaStage';
+import { Image as ImageIcon, Video as VideoIcon, Plus, Send } from 'lucide-react';
 
 const getApiBase = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -44,6 +46,7 @@ export default function TypistView() {
     const [manualId, setManualId] = useState('');
     const [isLinking, setIsLinking] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [media, setMedia] = useState({ url: '', type: 'image' });
 
     // Refs for audio processing
     const audioContextRef = useRef(null);
@@ -143,6 +146,11 @@ export default function TypistView() {
             setIsLinking(false);
             setIsHostRegistering(false);
             checkSlug(); // Refresh
+        });
+
+        socket.on('media-sync', (data = {}) => {
+            console.log('[SOCKET] Media Sync:', data);
+            setMedia({ url: data.mediaUrl, type: data.mediaType });
         });
 
         return () => {
@@ -722,19 +730,29 @@ export default function TypistView() {
             <div className="text-center pt-8 pb-4 relative">
                 <button
                     onClick={() => setShowGuide(true)}
-                    className="absolute top-8 right-0 p-1.5 glass rounded-full text-white/40 hover:text-pink-500 transition-colors"
+                    className="absolute top-8 right-0 p-1.5 glass rounded-full text-white/40 hover:text-rose-gold transition-colors"
                 >
                     <HelpCircle size={20} />
                 </button>
 
-                <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-purple-500/20 mb-4">
-                    <Zap className="text-purple-400" size={12} />
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-300">Synchronized Session</span>
+                <div className="flex items-center justify-center gap-2 glass-pill px-4 py-1.5 w-max mx-auto border-rose-gold/20 mb-4">
+                    <Zap className="text-rose-gold" size={12} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-gold/80">Synchronized Session</span>
                 </div>
-                <h1 className="text-5xl font-black tracking-tighter italic text-white uppercase leading-none">
+                <h1 className="text-5xl font-syne font-black tracking-tighter italic text-white uppercase leading-none">
                     <span className="text-gradient">TNT</span> SYNC
                 </h1>
             </div>
+
+            {/* Media Stage */}
+            <AnimatePresence mode="wait">
+                {media.url && (
+                    <MediaStage
+                        mediaUrl={media.url}
+                        type={media.type}
+                    />
+                )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {isClimaxRequested && (

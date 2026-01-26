@@ -31,7 +31,7 @@ const PulseParticles = ({ intensity }) => {
                 this.speedX = (Math.random() - 0.5) * 0.5;
                 this.speedY = (Math.random() - 0.5) * 0.5;
                 this.opacity = Math.random() * 0.5;
-                this.color = Math.random() > 0.5 ? '#7c3aed' : '#db2777';
+                this.color = Math.random() > 0.5 ? '#e0a696' : '#b88a7e';
             }
 
             update(intensity) {
