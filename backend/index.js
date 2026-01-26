@@ -169,6 +169,9 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3001;
 const LOVENSE_URL = 'https://api.lovense.com/api/standard/v1/command';
 
+// Unified Hardware Memory Store
+const hardwareLinks = new Map(); // uid -> { type: 'lovense' | 'joyhub', toyId? }
+
 // API Routes
 app.get('/', (req, res) => {
     res.send('<h1>Veroe Sync API</h1><p>The backend is running. Go to <a href="http://localhost:5173">localhost:5173</a> to use the app.</p>');
@@ -1185,12 +1188,33 @@ io.on('connection', (socket) => {
         socket.emit('api-feedback', { success: true, message: "Message Sent to Partner" });
     });
 
+    socket.on('set-hardware-type', ({ uid, type }) => {
+        const flowId = (uid || '').toLowerCase().trim();
+        console.log(`[HARDWARE] Host ${flowId} set active hardware to: ${type}`);
+        hardwareLinks.set(flowId, { type });
+    });
+
+    // WebRTC Signaling
+    socket.on('webrtc-signal-to-typist', ({ slug, signal }) => {
+        console.log(`[WEBRTC] Forwarding signal from host to typist:${slug}`);
+        io.to(`typist:${slug}`).emit('webrtc-signal', { signal });
+    });
+
+    socket.on('webrtc-signal-to-host', async ({ slug, signal }) => {
+        const conn = await getConnection(slug);
+        if (conn && conn.host) {
+            const hostUid = conn.host.uid.toLowerCase();
+            console.log(`[WEBRTC] Forwarding signal from typist:${slug} to host:${hostUid}`);
+            io.to(`host:${hostUid}`).emit('webrtc-signal', { signal, fromSlug: slug });
+        }
+    });
+
     socket.on('set-base-floor', ({ uid: rawUid, level }) => {
         const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
         baseFloors.set(uid, parseInt(level));
         // Trigger one pulse to show/test
-        sendCommand(uid, 'vibrate', Math.floor(parseInt(level) / 5), 1);
+        dispatchMulti(uid, level, { source: 'floor', duration: 1 });
     });
 
     socket.on('set-preset', ({ uid: rawUid, preset }) => {
@@ -1214,15 +1238,17 @@ io.on('connection', (socket) => {
         const interval = setInterval(() => {
             let strength = 0;
             if (preset === 'pulse') {
-                strength = 5;
+                strength = 50;
             } else if (preset === 'wave') {
-                strength = Math.floor(Math.sin(Date.now() / 1000) * 5 + 10);
+                strength = Math.floor(Math.sin(Date.now() / 1000) * 25 + 50);
             } else if (preset === 'chaos') {
-                strength = Math.floor(Math.random() * 15 + 5);
+                strength = Math.floor(Math.random() * 75 + 25);
             }
 
-            sendCommand(uid, 'vibrate', strength, 1);
-            io.to(`host:${uid.toLowerCase()}`).emit('incoming-pulse', { source: 'preset', level: strength });
+            if (strength > 0) {
+                dispatchMulti(uid, strength, { source: 'preset', duration: 1 });
+                io.to(`host:${uid.toLowerCase()}`).emit('incoming-pulse', { source: 'preset', level: strength / 5 });
+            }
         }, 2000);
 
         presets.set(uid, interval);
@@ -1239,12 +1265,15 @@ io.on('connection', (socket) => {
     socket.on('test-toy', async ({ uid: rawUid }) => {
         const targetUid = (rawUid || socket.uid || '').toLowerCase().trim();
         console.log(`[TEST-TOY] Direct test requested for UID: ${targetUid}`);
+
+        const link = hardwareLinks.get(targetUid);
         socket.emit('api-feedback', {
             success: true,
-            message: `SERVER RECEIVED CLICK FOR ${targetUid}. CONNECTING TO LOVENSE...`,
+            message: `SERVER RECEIVED CLICK FOR ${targetUid}. TARGET: ${link?.type || 'lovense'}.`,
             url: 'local'
         });
-        sendCommand(targetUid, 'Vibrate', 20, 6, socket);
+
+        dispatchMulti(targetUid, 100, { duration: 6, source: 'test' });
     });
 
     socket.on('run-diagnostics', async ({ uid: rawUid }) => {
@@ -1279,7 +1308,11 @@ io.on('connection', (socket) => {
             const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
             console.log(`[PULSE] Typing for ${slug} -> Host ${hostUid} (Room Size: ${roomSize}) | Status: APPROVED`);
 
-            sendCommand(hostUid, 'vibrate', intensity || 9, 1);
+            const link = hardwareLinks.get(hostUid);
+            dispatchMulti(hostUid, (intensity || 9) * 5, {
+                deviceType: link?.type || 'lovense',
+                source: 'typing'
+            });
             io.to(room).emit('incoming-pulse', { source: 'typing', level: intensity || 9 });
         } else {
             console.warn(`[BLOCK] Typing Pulse from ${slug}. Found: ${!!conn}, Host: ${!!conn?.host}, Approved: ${isApproved}`);
@@ -1294,7 +1327,12 @@ io.on('connection', (socket) => {
             const hostUid = conn.host.uid.toLowerCase();
             const room = `host:${hostUid}`;
             console.log(`[PULSE] Voice (${intensity}) from ${slug} -> host ${hostUid}`);
-            sendCommand(conn.host.uid, 'vibrate', intensity, 1);
+
+            const link = hardwareLinks.get(hostUid);
+            dispatchMulti(hostUid, intensity * 5, {
+                deviceType: link?.type || 'lovense',
+                source: 'voice'
+            });
 
             // Send visual feedback to host
             io.to(room).emit('incoming-pulse', { source: 'voice', level: intensity });
@@ -1324,8 +1362,8 @@ io.on('connection', (socket) => {
             const duration = 3; // Fixed 3 seconds
 
             console.log(`[SURGE] Executing for host ${hostUid} at 100%`);
-            sendCommand(hostUid, 'vibrate', surgeIntensity, duration);
-            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: surgeIntensity });
+            dispatchMulti(hostUid, 100, { source: 'surge' });
+            io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'surge', level: 20 });
 
             // Save to history
             try {
@@ -1407,14 +1445,14 @@ io.on('connection', (socket) => {
             if (pattern && Array.isArray(pattern)) {
                 // Run the custom pattern
                 for (const step of pattern) {
-                    sendCommand(hostUid, 'vibrate', step.intensity, step.duration);
+                    dispatchMulti(hostUid, step.intensity * 5, { duration: step.duration });
                     if (step.duration > 0) {
                         await new Promise(r => setTimeout(r, step.duration * 1000));
                     }
                 }
             } else {
                 // Default intense climax pattern: 10 seconds of 100% intensity
-                sendCommand(hostUid, 'vibrate', 20, 10);
+                dispatchMulti(hostUid, 100, { duration: 10 });
             }
         }
     });
@@ -1432,15 +1470,15 @@ io.on('connection', (socket) => {
             }
 
             if (active) {
-                sendCommand(hostUid, 'vibrate', 20, 2);
+                dispatchMulti(hostUid, 100, { duration: 2, source: 'overdrive' });
                 const interval = setInterval(() => {
-                    sendCommand(hostUid, 'vibrate', 20, 2);
+                    dispatchMulti(hostUid, 100, { duration: 2, source: 'overdrive' });
                     io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
                 }, 1500);
                 presets.set(hostUid, interval);
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
             } else {
-                sendCommand(hostUid, 'vibrate', 0, 1);
+                dispatchMulti(hostUid, 0, { duration: 1, source: 'overdrive' });
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
             }
             io.to(`host:${hostUid}`).emit('overdrive-status', { active });
@@ -1532,6 +1570,94 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
     // Immediate send if outside cooldown
     await performDispatch(uid, finalStrength, duration, directSocket);
 }
+
+/**
+ * Unified Dispatcher for Modern TypeNTalk
+ * Maps 0-100 inputs to device-specific ranges
+ */
+const joyhubQueues = new Map(); // uid -> { lastSent, timeout, pendingIntensity }
+
+async function dispatchMulti(uid, intensity, options = {}) {
+    const { deviceType, duration = 1, source = 'typist' } = options;
+    const normIntensity = Math.min(Math.max(intensity, 0), 100);
+
+    // Resolve device type: Provided > Last Known > Default(lovense)
+    const existingLink = hardwareLinks.get(uid);
+    const resolvedType = deviceType || existingLink?.type || 'lovense';
+
+    console.log(`[DISPATCH] Target: ${uid} | Type: ${resolvedType} | Intensity: ${normIntensity}% | Source: ${source}`);
+
+    if (resolvedType === 'joyhub') {
+        const jhIntensity = Math.round(normIntensity * 2.55);
+
+        // Throttling for JoyHub (Web Bluetooth hates rapid writes)
+        const now = Date.now();
+        let queue = joyhubQueues.get(uid);
+        if (!queue) {
+            queue = { lastSent: 0, timeout: null, pendingIntensity: 0 };
+            joyhubQueues.set(uid, queue);
+        }
+
+        const JOYHUB_COOLDOWN = 150; // ms
+        if (now - queue.lastSent < JOYHUB_COOLDOWN) {
+            queue.pendingIntensity = Math.max(queue.pendingIntensity, jhIntensity);
+            if (!queue.timeout) {
+                queue.timeout = setTimeout(() => {
+                    const finalIntensity = queue.pendingIntensity;
+                    queue.timeout = null;
+                    queue.pendingIntensity = 0;
+                    queue.lastSent = Date.now();
+                    io.to(`host:${uid}`).emit('joyhub:vibrate', {
+                        intensity: finalIntensity,
+                        percentage: Math.round(finalIntensity / 2.55),
+                        source
+                    });
+
+                    // Visual feedback for queued pulse
+                    io.to(`host:${uid}`).emit('incoming-pulse', {
+                        source: source,
+                        level: Math.round(finalIntensity / 12.75)
+                    });
+                }, JOYHUB_COOLDOWN - (now - queue.lastSent));
+            }
+            return { success: true, queued: true };
+        }
+
+        queue.lastSent = now;
+        io.to(`host:${uid}`).emit('joyhub:vibrate', {
+            intensity: jhIntensity,
+            percentage: normIntensity,
+            source
+        });
+
+        // Add visual feedback pulse for the dashboard
+        io.to(`host:${uid}`).emit('incoming-pulse', {
+            source: source,
+            level: Math.round(normIntensity / 5)
+        });
+
+        return { success: true, method: 'socket', target: 'browser-ble' };
+    }
+
+    // Default: Lovense Protocol (0-20 scale)
+    const lovenseIntensity = Math.round(normIntensity / 5);
+    return await sendCommand(uid, 'vibrate', lovenseIntensity, duration);
+}
+
+// Unified Type Route
+app.post('/api/type/multi', async (req, res) => {
+    const { slug, intensity, type = 'lovense', duration = 1 } = req.body;
+    if (!slug) return res.status(400).json({ error: 'Slug required' });
+
+    const conn = await getConnection(slug);
+    if (!conn || !conn.host || !conn.approved) {
+        return res.status(403).json({ error: 'Not approved or host offline' });
+    }
+
+    const hostUid = conn.host.uid.toLowerCase();
+    const result = await dispatchMulti(hostUid, intensity, { deviceType: type, duration });
+    res.json(result);
+});
 
 async function performDispatch(uid, strength, duration, directSocket) {
     const queue = commandQueues.get(uid);

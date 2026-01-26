@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye, Sliders, Volume2, VolumeX, RefreshCw, ThumbsUp, ThumbsDown, Activity, Target } from 'lucide-react';
+import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye, Sliders, Volume2, VolumeX, RefreshCw, ThumbsUp, ThumbsDown, Activity, Target, Camera, CameraOff, Video as VideoIcon } from 'lucide-react';
 import TypistAvatar from './ui/TypistAvatar';
 import PulseParticles from './ui/PulseParticles';
 import SessionHeatmap from './ui/SessionHeatmap';
 import { GoogleLogin } from '@react-oauth/google';
 import { motion, AnimatePresence } from 'framer-motion';
-import MediaStage from './ui/MediaStage';
-import { Image as ImageIcon, Video as VideoIcon, Plus } from 'lucide-react';
+import { useJoyHub } from '../hooks/useJoyHub';
 
 const getApiBase = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -25,6 +24,8 @@ export default function HostView() {
     const [qrDetails, setQrDetails] = useState(null);
     const [qrCode, setQrCode] = useState('');
     const [pairingCode, setPairingCode] = useState('');
+    const [deviceType, setDeviceType] = useState('lovense'); // lovense, joyhub
+    const joyhub = useJoyHub();
     const [customName, setCustomName] = useState(localStorage.getItem('host_custom_name') || '');
     const [typists, setTypists] = useState([]);
     const [toys, setToys] = useState(() => {
@@ -62,10 +63,16 @@ export default function HostView() {
     const [hostProfile, setHostProfile] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
     const [profileForm, setProfileForm] = useState({ username: '', avatar: '', vanitySlug: '' });
-    const [recentSignals, setRecentSignals] = useState([]);
-    const [media, setMedia] = useState({ url: '', type: 'image' });
-    const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-    const [mediaInput, setMediaInput] = useState('');
+
+    // WebRTC State
+    const [localStream, setLocalStream] = useState(null);
+    const [remoteStream, setRemoteStream] = useState(null);
+    const [camOn, setCamOn] = useState(false);
+    const [micOn, setMicOn] = useState(false);
+    const localVidRef = useRef(null);
+    const remoteVidRef = useRef(null);
+    const pcRef = useRef(null);
+
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -200,11 +207,6 @@ export default function HostView() {
             setApiFeedback(data);
         });
 
-        socket.on('media-sync', (data = {}) => {
-            console.log('[SOCKET] Media Sync:', data);
-            setMedia({ url: data.mediaUrl, type: data.mediaType });
-        });
-
         return () => {
             socket.off('connect');
             socket.off('disconnect');
@@ -216,8 +218,95 @@ export default function HostView() {
             socket.off('api-feedback');
             socket.off('overdrive-status');
             socket.off('partner-joined');
+            socket.off('webrtc-signal');
         };
     }, []);
+
+    // WebRTC Signaling Listener
+    useEffect(() => {
+        const handleSignal = async (data) => {
+            const { signal } = data;
+            const pc = pcRef.current || initPC();
+
+            try {
+                if (signal.type === 'offer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal));
+                    const ans = await pc.createAnswer();
+                    await pc.setLocalDescription(ans);
+                    socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: ans });
+                } else if (signal.type === 'answer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal));
+                } else if (signal.candidate) {
+                    await pc.addIceCandidate(new RTCIceCandidate(signal));
+                }
+            } catch (err) {
+                console.error('[WEBRTC] Signal handling error:', err);
+            }
+        };
+
+        socket.on('webrtc-signal', handleSignal);
+        return () => socket.off('webrtc-signal', handleSignal);
+    }, [isSocketConnected]);
+
+    const initPC = () => {
+        console.log('[WEBRTC] Initializing PeerConnection');
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        pc.onicecandidate = (e) => {
+            if (e.candidate) {
+                socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: e.candidate });
+            }
+        };
+
+        pc.ontrack = (e) => {
+            console.log('[WEBRTC] Remote track received');
+            setRemoteStream(e.streams[0]);
+            if (remoteVidRef.current) {
+                remoteVidRef.current.srcObject = e.streams[0];
+            }
+        };
+
+        pcRef.current = pc;
+        return pc;
+    };
+
+    const toggleCamera = async () => {
+        if (camOn) {
+            console.log('[WEBRTC] Stopping local stream');
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+            }
+            setCamOn(false);
+            setLocalStream(null);
+            if (pcRef.current) {
+                pcRef.current.close();
+                pcRef.current = null;
+            }
+        } else {
+            try {
+                console.log('[WEBRTC] Requesting camera/mic access');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                setLocalStream(stream);
+                setCamOn(true);
+                setMicOn(true);
+                if (localVidRef.current) {
+                    localVidRef.current.srcObject = stream;
+                }
+
+                const pc = pcRef.current || initPC();
+                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: offer });
+            } catch (err) {
+                console.error('[WEBRTC] Camera access error:', err);
+                setError('Camera/Mic access denied or unavailable.');
+            }
+        }
+    };
 
     const [partnerPresent, setPartnerPresent] = useState(false);
     useEffect(() => {
@@ -226,6 +315,15 @@ export default function HostView() {
             setPartnerPresent(true);
         });
     }, [isSocketConnected]);
+
+    // Hardware Mapping Sync
+    useEffect(() => {
+        const id = (linkedUid || customName || '').toLowerCase().trim();
+        if (id && isSocketConnected) {
+            console.log(`[HARDWARE] Syncing ${deviceType} for ${id}`);
+            socket.emit('set-hardware-type', { uid: id, type: deviceType });
+        }
+    }, [linkedUid, deviceType, isSocketConnected, customName]);
 
     const trackAnalytics = async () => {
         try {
@@ -734,20 +832,6 @@ export default function HostView() {
         }
     };
 
-    const updateMedia = (url) => {
-        if (!url) return;
-        const type = url.match(/\.(mp4|webm|ogg)$/i) ? 'video' : 'image';
-        setMedia({ url, type });
-        socket.emit('media-update', { uid: (customName || linkedUid), slug, mediaUrl: url, mediaType: type });
-        setIsMediaModalOpen(false);
-        setMediaInput('');
-    };
-
-    const clearMedia = () => {
-        setMedia({ url: '', type: 'image' });
-        socket.emit('media-update', { uid: (customName || linkedUid), slug, mediaUrl: '', mediaType: 'image' });
-    };
-
     return (
         <div className={`w-full mx-auto space-y-8 pb-20 relative transition-transform duration-75 ${shouldShake ? 'shake' : ''}`}>
             {/* Notification System */}
@@ -1104,51 +1188,98 @@ export default function HostView() {
                                 )}
                             </div>
 
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={startSession}
-                                    disabled={isLoading}
-                                    className={`w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            <div className="space-y-6">
+                                <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-4">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-white/30 text-center">Step 2: Choose Your Hardware</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDeviceType('lovense');
+                                                const id = (customName || '').toLowerCase();
+                                                if (id) socket.emit('set-hardware-type', { uid: id, type: 'lovense' });
+                                            }}
+                                            className={`py-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 group ${deviceType === 'lovense' ? 'border-pink-500 bg-pink-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/20'}`}
+                                        >
+                                            <div className={`p-3 rounded-xl transition-colors ${deviceType === 'lovense' ? 'bg-pink-500/20 text-pink-500' : 'bg-white/5 text-white/20 group-hover:text-white/40'}`}>
+                                                <Smartphone size={24} />
+                                            </div>
+                                            <div className="text-center">
+                                                <span className="text-xs font-black uppercase tracking-tighter italic block">Lovense Cloud</span>
+                                                <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mt-1">Via Mobile App</span>
+                                            </div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDeviceType('joyhub');
+                                                const id = (customName || '').toLowerCase();
+                                                if (id) socket.emit('set-hardware-type', { uid: id, type: 'joyhub' });
+                                            }}
+                                            className={`py-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 group ${deviceType === 'joyhub' ? 'border-purple-500 bg-purple-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/20'}`}
+                                        >
+                                            <div className={`p-3 rounded-xl transition-colors ${deviceType === 'joyhub' ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-white/20 group-hover:text-white/40'}`}>
+                                                <Zap size={24} />
+                                            </div>
+                                            <div className="text-center">
+                                                <span className="text-xs font-black uppercase tracking-tighter italic block">TrueForm / JoyHub</span>
+                                                <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mt-1">Direct Bluetooth</span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Dynamic Instructions */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    key={deviceType}
+                                    className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl"
                                 >
-                                    {isLoading ? (
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            CONNECTING...
+                                    <h3 className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                        <Info size={14} className="text-purple-400" />
+                                        {deviceType === 'lovense' ? 'LOVENSE SETUP INSTRUCTIONS' : 'BLUETOOTH SETUP INSTRUCTIONS'}
+                                    </h3>
+                                    <ul className="space-y-3">
+                                        {(deviceType === 'lovense' ? [
+                                            "Open Lovense Connect app on your phone",
+                                            "Tap '+' then 'Scan QR Code'",
+                                            "A secure tunnel will be established via Lovense Cloud"
+                                        ] : [
+                                            "Ensure Bluetooth is enabled on this computer",
+                                            "Turn on your TrueForm/JoyHub device",
+                                            "We will pair directly with your hardware via Web Bluetooth"
+                                        ]).map((step, i) => (
+                                            <li key={i} className="flex gap-3 items-start">
+                                                <span className="text-[10px] font-black text-purple-500/40 mt-0.5">{i + 1}.</span>
+                                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-tight leading-relaxed">{step}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {deviceType === 'joyhub' && (
+                                        <div className="mt-4 pt-4 border-t border-white/5">
+                                            <p className="text-[9px] text-yellow-500/40 font-black uppercase italic text-center tracking-widest">
+                                                ⚠ Requires Chrome or Edge Browser
+                                            </p>
                                         </div>
-                                    ) : (
-                                        <>START PAIRING <ArrowRight size={24} /></>
                                     )}
-                                </button>
-
-                                <button
-                                    onClick={async () => {
-                                        setIsLoading(true);
-                                        try {
-                                            const res = await axios.post(`${API_BASE}/api/connections/create`, {}, { timeout: 8000 });
-                                            if (res.data && res.data.slug) {
-                                                window.location.href = `/t/${res.data.slug}`;
-                                            }
-                                        } catch (err) {
-                                            setError('Failed to create control room. Please try again.');
-                                        } finally {
-                                            setIsLoading(false);
-                                        }
-                                    }}
-                                    disabled={isLoading}
-                                    className="w-full py-5 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/60"
-                                >
-                                    <Keyboard size={18} /> I am the Typist (Send Link to Host)
-                                </button>
-
-                                {isLoading && (
-                                    <button
-                                        onClick={bypassHandshake}
-                                        className="w-full py-4 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-2xl text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
-                                    >
-                                        ⚠️ HANGING? CLICK HERE TO BYPASS QR ⚠️
-                                    </button>
-                                )}
+                                </motion.div>
                             </div>
+
+                            <button
+                                onClick={deviceType === 'joyhub' ? () => setStatus('joyhub_link') : startSession}
+                                disabled={isLoading}
+                                className={`w-full button-premium py-8 rounded-[2rem] flex items-center justify-center gap-3 text-xl font-black shadow-2xl shadow-purple-500/20 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-95'}`}
+                            >
+                                {isLoading ? (
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        CONNECTING...
+                                    </div>
+                                ) : (
+                                    <>{deviceType === 'joyhub' ? 'ESTABLISH BLE BRIDGE' : 'START CLOUD PAIRING'} <ArrowRight size={24} /></>
+                                )}
+                            </button>
 
                             <div className="relative py-4">
                                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
@@ -1199,6 +1330,121 @@ export default function HostView() {
                                 className="w-full py-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
                             >
                                 <HelpCircle size={12} /> View Detailed Usage Instructions
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                status === 'joyhub_link' && (
+                    <div className="max-w-xl mx-auto">
+                        <div className="glass p-10 rounded-[2.5rem] flex flex-col items-center space-y-8 animate-in zoom-in-95 relative overflow-hidden">
+                            {/* Decorative Background Elements */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent" />
+                            <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl" />
+                            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl" />
+
+                            <div className="text-center space-y-2 w-full relative z-10">
+                                <h2 className="text-2xl font-black italic border-b border-white/5 pb-4 uppercase tracking-tighter">JoyHub Local Bridge</h2>
+                                <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] py-2 font-black italic">
+                                    Direct Web Bluetooth Encryption Active
+                                </p>
+                            </div>
+
+                            <div className="w-full space-y-6 relative z-10">
+                                {joyhub.isConnected ? (
+                                    <div className="p-10 bg-purple-500/[0.03] border-2 border-purple-500/20 rounded-[2rem] text-center space-y-6 shadow-2xl shadow-purple-500/10">
+                                        <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto border border-purple-500/20 kinky-glow-purple">
+                                            <Check className="text-purple-400" size={40} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-lg font-black text-white uppercase italic">✓ Connection Established</p>
+                                            <p className="text-[9px] font-black text-purple-400/40 uppercase tracking-widest">Tactical Hardware Synced</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/5">
+                                            <button
+                                                onClick={() => joyhub.vibrate(128)}
+                                                className="py-4 bg-white/5 hover:bg-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                            >
+                                                Pulse 50%
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    joyhub.disconnect();
+                                                    setTestSuccess(false);
+                                                }}
+                                                className="py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/10"
+                                            >
+                                                Disconnect
+                                            </button>
+                                        </div>
+                                        <button
+                                            onClick={() => setStatus('verified')}
+                                            className="w-full button-premium py-5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-500/20 mt-2"
+                                        >
+                                            PROCEED TO AUTH <ArrowRight size={18} className="inline ml-2" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <button
+                                            onClick={async () => {
+                                                const ok = await joyhub.connect();
+                                                if (ok) {
+                                                    const id = (customName || 'joyhost').toLowerCase();
+                                                    socket.emit('join-host', id);
+                                                    setLinkedUid(id);
+                                                    setToys({ 'JOY': { name: 'JoyHub BLE Device', type: 'Vibrate' } });
+                                                    await createLink(id);
+                                                    setTestSuccess(false); // Reset test status for new device
+                                                }
+                                            }}
+                                            disabled={joyhub.isConnecting}
+                                            className="w-full py-12 bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white rounded-[2.5rem] text-2xl font-black tracking-[0.1em] uppercase transition-all shadow-2xl shadow-purple-500/30 active:scale-[0.98] disabled:opacity-50 group border border-purple-400/20"
+                                        >
+                                            {joyhub.isConnecting ? (
+                                                <div className="flex items-center justify-center gap-4">
+                                                    <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    INITIATING...
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="mb-2 p-3 bg-white/10 rounded-2xl group-hover:scale-110 transition-transform">
+                                                        <Zap size={32} fill="currentColor" />
+                                                    </div>
+                                                    <span>ESTABLISH LINK</span>
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        <p className="text-[9px] text-white/20 uppercase font-black text-center tracking-[0.2em] leading-relaxed max-w-[80%] mx-auto">
+                                            A browser popup will appear. Select your device from the list to finalize the bridge.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {joyhub.error && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="p-5 bg-red-500/10 border-2 border-red-500/20 rounded-2xl space-y-2"
+                                    >
+                                        <p className="text-[10px] text-red-500 font-extrabold uppercase tracking-widest text-center italic flex items-center justify-center gap-2">
+                                            <Info size={14} /> Bluetooth Error
+                                        </p>
+                                        <p className="text-[9px] text-red-400/60 font-medium uppercase text-center leading-relaxed">
+                                            {joyhub.error.includes('User cancelled') ? 'Link request cancelled by user.' : joyhub.error}
+                                        </p>
+                                    </motion.div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => setStatus('setup')}
+                                className="w-full py-4 text-[9px] font-black uppercase tracking-[0.5em] text-white/10 hover:text-white transition-colors mt-4"
+                            >
+                                ← BACK TO SETUP
                             </button>
                         </div>
                     </div>
@@ -1411,41 +1657,46 @@ export default function HostView() {
 
             {
                 status === 'connected' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 items-start">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-in fade-in zoom-in-95 items-start">
                         {/* COLUMN 1: Visuals & Core Status (Left) */}
-                        <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-24 order-2 lg:order-1">
-                            <div className={`glass-premium p-8 rounded-[2.5rem] relative overflow-hidden transition-all duration-700 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_80px_rgba(239,68,68,0.2)]' : 'border-rose-gold/20'}`}>
+                        <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8 order-2 lg:order-1">
+                            <div className={`glass p-6 rounded-[2rem] border-green-500/20 relative overflow-hidden transition-all duration-500 ${isOverdrive ? 'border-red-500 bg-red-500/10 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : 'bg-green-500/[0.02]'}`}>
                                 <PulseParticles intensity={isOverdrive ? 100 : intensity} />
                                 <div className="flex flex-col items-center text-center space-y-4 relative z-10">
-                                    <div className="w-20 h-20 bg-rose-gold/10 rounded-[2rem] flex items-center justify-center border border-rose-gold/20 shadow-[0_0_20px_rgba(224,166,150,0.1)]">
-                                        <Shield className="text-rose-gold" size={40} />
+                                    <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
+                                        <Shield className="text-green-500" size={32} />
                                     </div>
                                     <div>
-                                        <h3 className="font-syne font-black text-3xl text-white tracking-tighter text-gradient italic">ENGAGED</h3>
-                                        <p className="text-rose-gold/60 text-[9px] font-black tracking-[0.4em] uppercase mt-2">
-                                            {Object.keys(toys).length} Device(s) Synced
-                                        </p>
-
-                                        {Object.keys(toys).length > 0 && (
-                                            <div className="w-full space-y-2 mt-4 px-2">
-                                                {Object.entries(toys).map(([tid, t]) => (
-                                                    <div key={tid} className="flex items-center gap-3 bg-white/[0.03] border border-white/5 rounded-2xl p-3 text-left group hover:bg-white/[0.05] transition-all">
-                                                        <div className="p-2 bg-green-500/10 rounded-xl text-green-500 group-hover:scale-110 transition-transform">
-                                                            <Smartphone size={14} />
-                                                        </div>
-                                                        <div className="flex-1 overflow-hidden">
-                                                            <p className="text-[9px] font-black text-white/80 truncate uppercase tracking-tight">{t.name || 'Linked Hardware'}</p>
-                                                            <div className="flex gap-1 mt-1">
-                                                                {(t.v !== undefined ? t.v > 0 : true) && <span className="text-[7px] bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded-md font-black">VIBRATE</span>}
-                                                                {t.o > 0 && <span className="text-[7px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md font-black">OSCI</span>}
-                                                                {t.r > 0 && <span className="text-[7px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-md font-black">ROT</span>}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                        <h3 className="font-black text-2xl text-white tracking-tight text-gradient">ACTIVE</h3>
+                                        <div className="flex flex-col items-center gap-1 mt-1">
+                                            <p className="text-green-500 text-[8px] font-black tracking-[0.2em] uppercase">
+                                                {Object.keys(toys).length} Device(s) Linked
+                                            </p>
+                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full border border-white/5">
+                                                <div className={`w-1 h-1 rounded-full ${deviceType === 'joyhub' ? (joyhub.isConnected ? 'bg-purple-400 animate-pulse' : 'bg-red-400') : 'bg-pink-500'}`} />
+                                                <span className="text-[7px] font-black text-white/40 uppercase tracking-widest">
+                                                    {deviceType === 'joyhub' ? 'BLE BRIDGE' : 'CLOUD TUNNEL'}
+                                                </span>
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
+
+                                    {deviceType === 'joyhub' && !joyhub.isConnected && (
+                                        <div className="w-full p-3 bg-red-500/10 border border-red-500/20 rounded-xl animate-pulse">
+                                            <p className="text-[8px] font-black text-red-500 uppercase text-center leading-tight">
+                                                ⚠ BLUETOOTH DISCONNECTED
+                                                <button onClick={() => setStatus('joyhub_link')} className="block mt-1 underline text-white">RECONNECT</button>
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {deviceType === 'joyhub' && joyhub.isConnected && (
+                                        <div className="w-full py-1 px-3 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                                            <p className="text-[7px] font-black text-purple-400 uppercase text-center">
+                                                Stay on this page to maintain BLE link
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div className="flex gap-2 w-full">
                                         <button
@@ -1507,35 +1758,61 @@ export default function HostView() {
 
                         {/* COLUMN 2: Live Feeds (Center) */}
                         <div className="lg:col-span-6 space-y-6 order-1 lg:order-2">
-                            {/* Media Stage */}
-                            <AnimatePresence mode="wait">
-                                {media.url ? (
-                                    <MediaStage
-                                        key="media-stage"
-                                        mediaUrl={media.url}
-                                        type={media.type}
-                                        onClose={clearMedia}
-                                    />
-                                ) : (
+                            {/* WebRTC Video Stage */}
+                            <div className="video-container group">
+                                <video
+                                    ref={remoteVidRef}
+                                    className="video-full"
+                                    autoPlay
+                                    playsInline
+                                    poster="https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80&w=1000"
+                                />
+                                <div className="video-overlay" />
+
+                                {camOn && (
                                     <motion.div
-                                        key="media-placeholder"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        className="w-full aspect-video glass-premium rounded-[3rem] border-dashed border-2 border-rose-gold/20 flex flex-col items-center justify-center space-y-4 group cursor-pointer hover:border-rose-gold/40 transition-all hover:bg-rose-gold/5"
-                                        onClick={() => setIsMediaModalOpen(true)}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="cam-preview-small"
                                     >
-                                        <div className="p-6 bg-rose-gold/10 rounded-full text-rose-gold group-hover:scale-110 transition-transform">
-                                            <ImageIcon size={48} />
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-xl font-syne font-black text-rose-gold uppercase tracking-tighter italic">Media Stage Offline</p>
-                                            <p className="text-[10px] text-white/20 uppercase font-black tracking-widest mt-1 group-hover:text-white/40 transition-colors">Click to broadcast session media</p>
-                                        </div>
+                                        <video ref={localVidRef} className="video-full" autoPlay playsInline muted />
                                     </motion.div>
                                 )}
-                            </AnimatePresence>
 
+                                <div className="absolute top-6 left-6 z-20">
+                                    <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                                        <div className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-green-500 animate-pulse' : 'bg-white/20'}`} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
+                                            {remoteStream ? 'LIVE ENCRYPTED FEED' : 'Awaiting Partner Feed'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="video-controls opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={toggleCamera}
+                                        className={`video-control-btn ${camOn ? 'active' : ''}`}
+                                        title={camOn ? 'Turn Off Camera' : 'Turn On Camera'}
+                                    >
+                                        {camOn ? <CameraOff size={20} /> : <Camera size={20} />}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (localStream) {
+                                                const audioTrack = localStream.getAudioTracks()[0];
+                                                if (audioTrack) {
+                                                    audioTrack.enabled = !micOn;
+                                                    setMicOn(!micOn);
+                                                }
+                                            }
+                                        }}
+                                        className={`video-control-btn ${micOn ? 'active' : ''}`}
+                                        title={micOn ? 'Mute Mic' : 'Unmute Mic'}
+                                    >
+                                        {micOn ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                    </button>
+                                </div>
+                            </div>
                             {/* Pending Approvals */}
                             <AnimatePresence>
                                 {typists.length > 0 && (
@@ -1838,73 +2115,6 @@ export default function HostView() {
                     </button>
                 )}
             </section>
-            {/* Media Library Modal */}
-            <AnimatePresence>
-                {isMediaModalOpen && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsMediaModalOpen(false)}
-                            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200]"
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 50 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 50 }}
-                            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl glass-premium p-10 rounded-[3rem] border border-rose-gold/30 shadow-2xl z-[201]"
-                        >
-                            <div className="absolute top-8 right-8">
-                                <button onClick={() => setIsMediaModalOpen(false)} className="text-white/20 hover:text-white">
-                                    <X size={28} />
-                                </button>
-                            </div>
-
-                            <div className="space-y-8">
-                                <div className="text-center space-y-2">
-                                    <div className="p-4 bg-rose-gold/10 rounded-full w-max mx-auto border border-rose-gold/20">
-                                        <ImageIcon className="text-rose-gold" size={32} />
-                                    </div>
-                                    <h2 className="text-3xl font-syne font-black text-gradient uppercase italic tracking-tighter">Media Broadcast</h2>
-                                    <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Sync high-definition visuals across the tunnel</p>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/30 ml-2">Media Direct URL (Image or MP4)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="HTTPS://..."
-                                        value={mediaInput}
-                                        onChange={(e) => setMediaInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && updateMedia(mediaInput)}
-                                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl p-6 text-sm font-medium text-white/50 focus:border-rose-gold outline-none transition-all"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={() => updateMedia(mediaInput)}
-                                    disabled={!mediaInput.trim()}
-                                    className="w-full button-premium py-6 rounded-2xl flex items-center justify-center gap-3 text-lg font-black disabled:opacity-20"
-                                >
-                                    BROADCAST TO STAGE <Zap size={20} />
-                                </button>
-
-                                <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
-                                    <div className="text-center p-4 rounded-3xl bg-white/[0.02] border border-white/5">
-                                        <div className="text-rose-gold mb-2 flex justify-center"><ImageIcon size={20} /></div>
-                                        <p className="text-[9px] font-black uppercase text-white/40">Images (4K/HD)</p>
-                                    </div>
-                                    <div className="text-center p-4 rounded-3xl bg-white/[0.02] border border-white/5">
-                                        <div className="text-rose-gold mb-2 flex justify-center"><VideoIcon size={20} /></div>
-                                        <p className="text-[9px] font-black uppercase text-white/40">Videos (Direct Link)</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
         </div >
     );
 }
