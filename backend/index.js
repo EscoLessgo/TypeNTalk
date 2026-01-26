@@ -1494,6 +1494,8 @@ async function sendCommand(uid, command, strength, duration, directSocket = null
  * Unified Dispatcher for Modern TypeNTalk
  * Maps 0-100 inputs to device-specific ranges
  */
+const joyhubQueues = new Map(); // uid -> { lastSent, timeout, pendingIntensity }
+
 async function dispatchMulti(uid, intensity, options = {}) {
     const { deviceType, duration = 1, source = 'typist' } = options;
     const normIntensity = Math.min(Math.max(intensity, 0), 100);
@@ -1506,6 +1508,35 @@ async function dispatchMulti(uid, intensity, options = {}) {
 
     if (resolvedType === 'joyhub') {
         const jhIntensity = Math.round(normIntensity * 2.55);
+
+        // Throttling for JoyHub (Web Bluetooth hates rapid writes)
+        const now = Date.now();
+        let queue = joyhubQueues.get(uid);
+        if (!queue) {
+            queue = { lastSent: 0, timeout: null, pendingIntensity: 0 };
+            joyhubQueues.set(uid, queue);
+        }
+
+        const JOYHUB_COOLDOWN = 150; // ms
+        if (now - queue.lastSent < JOYHUB_COOLDOWN) {
+            queue.pendingIntensity = Math.max(queue.pendingIntensity, jhIntensity);
+            if (!queue.timeout) {
+                queue.timeout = setTimeout(() => {
+                    const finalIntensity = queue.pendingIntensity;
+                    queue.timeout = null;
+                    queue.pendingIntensity = 0;
+                    queue.lastSent = Date.now();
+                    io.to(`host:${uid}`).emit('joyhub:vibrate', {
+                        intensity: finalIntensity,
+                        percentage: Math.round(finalIntensity / 2.55),
+                        source
+                    });
+                }, JOYHUB_COOLDOWN - (now - queue.lastSent));
+            }
+            return { success: true, queued: true };
+        }
+
+        queue.lastSent = now;
         io.to(`host:${uid}`).emit('joyhub:vibrate', {
             intensity: jhIntensity,
             percentage: normIntensity,

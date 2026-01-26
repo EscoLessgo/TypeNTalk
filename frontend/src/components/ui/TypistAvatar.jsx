@@ -1,10 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const TypistAvatar = ({ intensity, lastAction }) => {
+const TypistAvatar = ({ intensity = 0, lastAction = 'typing' }) => {
     // intensity is 0-100
-    const scale = 1 + (intensity / 200);
-    const blur = Math.min(intensity / 10, 5);
+    const safeIntensity = typeof intensity === 'number' ? intensity : 0;
+    const scale = 1 + (safeIntensity / 200);
+    const blur = Math.min(safeIntensity / 10, 5);
+
+    const baseD = "M50 10 C 25 10, 10 25, 10 50 C 10 75, 25 90, 50 90 C 75 90, 90 75, 90 50 C 90 25, 75 10, 50 10";
 
     return (
         <div className="relative w-48 h-48 mx-auto mb-8">
@@ -27,7 +30,7 @@ const TypistAvatar = ({ intensity, lastAction }) => {
                 className="relative w-full h-full rounded-full border-4 border-white/10 overflow-hidden glass shadow-2xl"
                 animate={{
                     scale: scale,
-                    rotate: intensity > 20 ? [0, -1, 1, -1, 0] : 0,
+                    rotate: safeIntensity > 20 ? [0, -1, 1, -1, 0] : 0,
                 }}
                 transition={{
                     type: "spring",
@@ -49,21 +52,21 @@ const TypistAvatar = ({ intensity, lastAction }) => {
                     </defs>
 
                     <motion.path
-                        d="M50 10 C 25 10, 10 25, 10 50 C 10 75, 25 90, 50 90 C 75 90, 90 75, 90 50 C 90 25, 75 10, 50 10"
+                        d={baseD}
                         fill="url(#avatarGrad)"
                         filter="url(#gooey)"
                         animate={{
-                            d: intensity > 30
+                            d: safeIntensity > 30
                                 ? [
                                     "M50 15 C 30 15, 15 30, 15 50 C 15 70, 30 85, 50 85 C 70 85, 85 70, 85 50 C 85 30, 70 15, 50 15",
                                     "M50 10 C 20 10, 5 30, 10 50 C 15 75, 30 95, 50 90 C 70 85, 95 70, 90 50 C 85 30, 80 10, 50 10",
                                     "M50 15 C 30 15, 15 30, 15 50 C 15 70, 30 85, 50 85 C 70 85, 85 70, 85 50 C 85 30, 70 15, 50 15"
                                 ]
-                                : "M50 10 C 25 10, 10 25, 10 50 C 10 75, 25 90, 50 90 C 75 90, 90 75, 90 50 C 90 25, 75 10, 50 10"
+                                : baseD
                         }}
                         transition={{
                             duration: 0.5,
-                            repeat: intensity > 30 ? Infinity : 0,
+                            repeat: safeIntensity > 30 ? Infinity : 0,
                             ease: "easeInOut"
                         }}
                     />
@@ -71,8 +74,8 @@ const TypistAvatar = ({ intensity, lastAction }) => {
                     {/* Eyes/Expression */}
                     <motion.g
                         animate={{
-                            y: intensity > 50 ? -2 : 0,
-                            scaleY: intensity > 70 ? 0.2 : 1
+                            y: safeIntensity > 50 ? -2 : 0,
+                            scaleY: safeIntensity > 70 ? 0.2 : 1
                         }}
                     >
                         <circle cx="35" cy="45" r="4" fill="white" fillOpacity="0.8" />
@@ -82,26 +85,26 @@ const TypistAvatar = ({ intensity, lastAction }) => {
                         <motion.circle
                             cx="30" cy="55" r="6"
                             fill="#db2777"
-                            animate={{ opacity: intensity / 100 }}
+                            animate={{ opacity: safeIntensity / 100 }}
                         />
                         <motion.circle
                             cx="70" cy="55" r="6"
                             fill="#db2777"
-                            animate={{ opacity: intensity / 100 }}
+                            animate={{ opacity: safeIntensity / 100 }}
                         />
                     </motion.g>
 
                     {/* Mouth */}
                     <motion.path
-                        d={intensity > 40 ? "M40 65 Q 50 75, 60 65" : "M42 65 Q 50 67, 58 65"}
+                        d={safeIntensity > 40 ? "M40 65 Q 50 75, 60 65" : "M42 65 Q 50 67, 58 65"}
                         stroke="white"
                         strokeWidth="3"
                         strokeLinecap="round"
                         fill="none"
                         animate={{
-                            d: intensity > 60
+                            d: safeIntensity > 60
                                 ? "M35 70 Q 50 85, 65 70"
-                                : intensity > 30
+                                : safeIntensity > 30
                                     ? "M40 65 Q 50 75, 60 65"
                                     : "M42 68 Q 50 70, 58 68"
                         }}
@@ -111,7 +114,7 @@ const TypistAvatar = ({ intensity, lastAction }) => {
 
             {/* Intensity Rings */}
             <AnimatePresence>
-                {intensity > 50 && (
+                {safeIntensity > 50 && (
                     <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1.5, opacity: 0 }}
@@ -126,8 +129,8 @@ const TypistAvatar = ({ intensity, lastAction }) => {
             <motion.div
                 className="absolute -bottom-4 left-1/2 -translate-x-1/2 glass-pill px-4 py-1 text-[10px] font-black uppercase tracking-widest text-pink-400 whitespace-nowrap"
                 animate={{
-                    y: intensity > 10 ? [0, -4, 0] : 0,
-                    opacity: intensity > 0 ? 1 : 0
+                    y: safeIntensity > 10 ? [0, -4, 0] : 0,
+                    opacity: safeIntensity > 0 ? 1 : 0
                 }}
             >
                 {lastAction === 'voice' ? 'Liquid Sync' : 'Keystroke Pulse'}

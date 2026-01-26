@@ -62,8 +62,14 @@ export function useJoyHub() {
         }
     }, []);
 
-    const vibrate = useCallback(async (intensity) => {
-        if (!characteristic) return;
+    const isWriting = useRef(false);
+    const writeQueue = useRef([]);
+
+    const processQueue = useCallback(async () => {
+        if (isWriting.current || writeQueue.current.length === 0 || !characteristic) return;
+
+        isWriting.current = true;
+        const intensity = writeQueue.current.shift();
 
         try {
             // intensity is 0-255
@@ -71,9 +77,24 @@ export function useJoyHub() {
             await characteristic.writeValue(data);
             setLastIntensity(intensity);
         } catch (err) {
-            console.error('[JOYHUB] Vibrate failed:', err);
+            console.error('[JOYHUB] Vibrate failed:', err.message);
+        } finally {
+            isWriting.current = false;
+            // Short delay to let hardware breathe
+            setTimeout(processQueue, 20);
         }
     }, [characteristic]);
+
+    const vibrate = useCallback((intensity) => {
+        // Keep queue small to stay responsive - only store the latest intensity
+        // if we are already busy, to avoid "laggy" vibration
+        if (writeQueue.current.length > 2) {
+            writeQueue.current = [intensity];
+        } else {
+            writeQueue.current.push(intensity);
+        }
+        processQueue();
+    }, [processQueue]);
 
     const disconnect = useCallback(() => {
         if (device && device.gatt.connected) {
