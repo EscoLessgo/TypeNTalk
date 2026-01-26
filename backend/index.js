@@ -1128,6 +1128,21 @@ io.on('connection', (socket) => {
         hardwareLinks.set(flowId, { type });
     });
 
+    // WebRTC Signaling
+    socket.on('webrtc-signal-to-typist', ({ slug, signal }) => {
+        console.log(`[WEBRTC] Forwarding signal from host to typist:${slug}`);
+        io.to(`typist:${slug}`).emit('webrtc-signal', { signal });
+    });
+
+    socket.on('webrtc-signal-to-host', async ({ slug, signal }) => {
+        const conn = await getConnection(slug);
+        if (conn && conn.host) {
+            const hostUid = conn.host.uid.toLowerCase();
+            console.log(`[WEBRTC] Forwarding signal from typist:${slug} to host:${hostUid}`);
+            io.to(`host:${hostUid}`).emit('webrtc-signal', { signal, fromSlug: slug });
+        }
+    });
+
     socket.on('set-base-floor', ({ uid: rawUid, level }) => {
         const uid = (rawUid || '').toLowerCase().trim();
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);

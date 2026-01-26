@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import socket from '../socket';
-import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye, Sliders, Volume2, VolumeX, RefreshCw, ThumbsUp, ThumbsDown, Activity, Target } from 'lucide-react';
+import { Shield, Smartphone, Copy, Check, Info, ArrowRight, Sparkles, Keyboard, Heart, HelpCircle, X, Zap, Lock, Eye, Sliders, Volume2, VolumeX, RefreshCw, ThumbsUp, ThumbsDown, Activity, Target, Camera, CameraOff, Video as VideoIcon } from 'lucide-react';
 import TypistAvatar from './ui/TypistAvatar';
 import PulseParticles from './ui/PulseParticles';
 import SessionHeatmap from './ui/SessionHeatmap';
@@ -63,6 +63,16 @@ export default function HostView() {
     const [hostProfile, setHostProfile] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
     const [profileForm, setProfileForm] = useState({ username: '', avatar: '', vanitySlug: '' });
+
+    // WebRTC State
+    const [localStream, setLocalStream] = useState(null);
+    const [remoteStream, setRemoteStream] = useState(null);
+    const [camOn, setCamOn] = useState(false);
+    const [micOn, setMicOn] = useState(false);
+    const localVidRef = useRef(null);
+    const remoteVidRef = useRef(null);
+    const pcRef = useRef(null);
+
     const audioRef = useRef(null);
     const slugRef = useRef('');
 
@@ -208,8 +218,95 @@ export default function HostView() {
             socket.off('api-feedback');
             socket.off('overdrive-status');
             socket.off('partner-joined');
+            socket.off('webrtc-signal');
         };
     }, []);
+
+    // WebRTC Signaling Listener
+    useEffect(() => {
+        const handleSignal = async (data) => {
+            const { signal } = data;
+            const pc = pcRef.current || initPC();
+
+            try {
+                if (signal.type === 'offer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal));
+                    const ans = await pc.createAnswer();
+                    await pc.setLocalDescription(ans);
+                    socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: ans });
+                } else if (signal.type === 'answer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal));
+                } else if (signal.candidate) {
+                    await pc.addIceCandidate(new RTCIceCandidate(signal));
+                }
+            } catch (err) {
+                console.error('[WEBRTC] Signal handling error:', err);
+            }
+        };
+
+        socket.on('webrtc-signal', handleSignal);
+        return () => socket.off('webrtc-signal', handleSignal);
+    }, [isSocketConnected]);
+
+    const initPC = () => {
+        console.log('[WEBRTC] Initializing PeerConnection');
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        pc.onicecandidate = (e) => {
+            if (e.candidate) {
+                socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: e.candidate });
+            }
+        };
+
+        pc.ontrack = (e) => {
+            console.log('[WEBRTC] Remote track received');
+            setRemoteStream(e.streams[0]);
+            if (remoteVidRef.current) {
+                remoteVidRef.current.srcObject = e.streams[0];
+            }
+        };
+
+        pcRef.current = pc;
+        return pc;
+    };
+
+    const toggleCamera = async () => {
+        if (camOn) {
+            console.log('[WEBRTC] Stopping local stream');
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+            }
+            setCamOn(false);
+            setLocalStream(null);
+            if (pcRef.current) {
+                pcRef.current.close();
+                pcRef.current = null;
+            }
+        } else {
+            try {
+                console.log('[WEBRTC] Requesting camera/mic access');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                setLocalStream(stream);
+                setCamOn(true);
+                setMicOn(true);
+                if (localVidRef.current) {
+                    localVidRef.current.srcObject = stream;
+                }
+
+                const pc = pcRef.current || initPC();
+                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('webrtc-signal-to-typist', { slug: slugRef.current, signal: offer });
+            } catch (err) {
+                console.error('[WEBRTC] Camera access error:', err);
+                setError('Camera/Mic access denied or unavailable.');
+            }
+        }
+    };
 
     const [partnerPresent, setPartnerPresent] = useState(false);
     useEffect(() => {
@@ -1661,6 +1758,61 @@ export default function HostView() {
 
                         {/* COLUMN 2: Live Feeds (Center) */}
                         <div className="lg:col-span-6 space-y-6 order-1 lg:order-2">
+                            {/* WebRTC Video Stage */}
+                            <div className="video-container group">
+                                <video
+                                    ref={remoteVidRef}
+                                    className="video-full"
+                                    autoPlay
+                                    playsInline
+                                    poster="https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80&w=1000"
+                                />
+                                <div className="video-overlay" />
+
+                                {camOn && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="cam-preview-small"
+                                    >
+                                        <video ref={localVidRef} className="video-full" autoPlay playsInline muted />
+                                    </motion.div>
+                                )}
+
+                                <div className="absolute top-6 left-6 z-20">
+                                    <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                                        <div className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-green-500 animate-pulse' : 'bg-white/20'}`} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
+                                            {remoteStream ? 'LIVE ENCRYPTED FEED' : 'Awaiting Partner Feed'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="video-controls opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={toggleCamera}
+                                        className={`video-control-btn ${camOn ? 'active' : ''}`}
+                                        title={camOn ? 'Turn Off Camera' : 'Turn On Camera'}
+                                    >
+                                        {camOn ? <CameraOff size={20} /> : <Camera size={20} />}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (localStream) {
+                                                const audioTrack = localStream.getAudioTracks()[0];
+                                                if (audioTrack) {
+                                                    audioTrack.enabled = !micOn;
+                                                    setMicOn(!micOn);
+                                                }
+                                            }
+                                        }}
+                                        className={`video-control-btn ${micOn ? 'active' : ''}`}
+                                        title={micOn ? 'Mute Mic' : 'Unmute Mic'}
+                                    >
+                                        {micOn ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                    </button>
+                                </div>
+                            </div>
                             {/* Pending Approvals */}
                             <AnimatePresence>
                                 {typists.length > 0 && (

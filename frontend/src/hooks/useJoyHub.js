@@ -73,23 +73,25 @@ export function useJoyHub() {
 
         try {
             // intensity is 0-255
-            const data = new Uint8Array([0xff, 0x04, 0x01, 0x00, intensity]);
+            // Updated to use the 0xa0 protocol found in the TrueForm reference bridge:
+            // [0xa0, 0x0c, 0x00, 0x00, power_flag, speed]
+            const data = new Uint8Array([0xa0, 0x0c, 0x00, 0x00, intensity === 0 ? 0 : 1, intensity]);
 
-            // Try writeValue (modern) or writeValueWithResponse/writeValueWithoutResponse
-            if (characteristic.writeValue) {
+            // Try writeValue (modern) or writeValueWithoutResponse (faster)
+            if (characteristic.writeValueWithoutResponse) {
+                await characteristic.writeValueWithoutResponse(data);
+            } else if (characteristic.writeValue) {
                 await characteristic.writeValue(data);
-            } else if (characteristic.writeValueWithResponse) {
-                await characteristic.writeValueWithResponse(data);
             }
 
             setLastIntensity(intensity);
-            if (intensity > 0) console.log(`[JOYHUB] Physically wrote intensity: ${intensity}`);
+            if (intensity > 0) console.log(`[JOYHUB] Physically wrote intensity: ${intensity} (Protocol: 0xa0)`);
         } catch (err) {
             console.error('[JOYHUB] Vibrate failed:', err.message || err);
         } finally {
             isWriting.current = false;
             // Short delay to let hardware breathe
-            setTimeout(processQueue, 20);
+            setTimeout(processQueue, 50);
         }
     }, [characteristic]);
 
@@ -105,16 +107,20 @@ export function useJoyHub() {
     }, [processQueue]);
 
     const disconnect = useCallback(() => {
-        if (device && device.gatt.connected) {
+        if (device && device.gatt && device.gatt.connected) {
             try {
                 device.gatt.disconnect();
-            } catch (e) { }
+                console.log('[JOYHUB] GATT Disconnected manually');
+            } catch (e) {
+                console.error('[JOYHUB] Disconnect error:', e);
+            }
         }
         setIsConnected(false);
         setCharacteristic(null);
         setDevice(null);
         writeQueue.current = [];
         isWriting.current = false;
+        setLastIntensity(0);
     }, [device]);
 
     // Socket Listener for Backend Commands
