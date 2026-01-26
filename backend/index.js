@@ -1133,7 +1133,7 @@ io.on('connection', (socket) => {
         console.log(`[CONFIG] Base floor for ${uid} set to ${level}`);
         baseFloors.set(uid, parseInt(level));
         // Trigger one pulse to show/test
-        sendCommand(uid, 'vibrate', Math.floor(parseInt(level) / 5), 1);
+        dispatchMulti(uid, level, { source: 'floor', duration: 1 });
     });
 
     socket.on('set-preset', ({ uid: rawUid, preset }) => {
@@ -1157,15 +1157,17 @@ io.on('connection', (socket) => {
         const interval = setInterval(() => {
             let strength = 0;
             if (preset === 'pulse') {
-                strength = 5;
+                strength = 50;
             } else if (preset === 'wave') {
-                strength = Math.floor(Math.sin(Date.now() / 1000) * 5 + 10);
+                strength = Math.floor(Math.sin(Date.now() / 1000) * 25 + 50);
             } else if (preset === 'chaos') {
-                strength = Math.floor(Math.random() * 15 + 5);
+                strength = Math.floor(Math.random() * 75 + 25);
             }
 
-            sendCommand(uid, 'vibrate', strength, 1);
-            io.to(`host:${uid.toLowerCase()}`).emit('incoming-pulse', { source: 'preset', level: strength });
+            if (strength > 0) {
+                dispatchMulti(uid, strength, { source: 'preset', duration: 1 });
+                io.to(`host:${uid.toLowerCase()}`).emit('incoming-pulse', { source: 'preset', level: strength / 5 });
+            }
         }, 2000);
 
         presets.set(uid, interval);
@@ -1182,12 +1184,15 @@ io.on('connection', (socket) => {
     socket.on('test-toy', async ({ uid: rawUid }) => {
         const targetUid = (rawUid || socket.uid || '').toLowerCase().trim();
         console.log(`[TEST-TOY] Direct test requested for UID: ${targetUid}`);
+
+        const link = hardwareLinks.get(targetUid);
         socket.emit('api-feedback', {
             success: true,
-            message: `SERVER RECEIVED CLICK FOR ${targetUid}. CONNECTING TO LOVENSE...`,
+            message: `SERVER RECEIVED CLICK FOR ${targetUid}. TARGET: ${link?.type || 'lovense'}.`,
             url: 'local'
         });
-        sendCommand(targetUid, 'Vibrate', 20, 6, socket);
+
+        dispatchMulti(targetUid, 100, { duration: 6, source: 'test' });
     });
 
     socket.on('run-diagnostics', async ({ uid: rawUid }) => {
@@ -1384,15 +1389,15 @@ io.on('connection', (socket) => {
             }
 
             if (active) {
-                sendCommand(hostUid, 'vibrate', 20, 2);
+                dispatchMulti(hostUid, 100, { duration: 2, source: 'overdrive' });
                 const interval = setInterval(() => {
-                    sendCommand(hostUid, 'vibrate', 20, 2);
+                    dispatchMulti(hostUid, 100, { duration: 2, source: 'overdrive' });
                     io.to(`host:${hostUid}`).emit('incoming-pulse', { source: 'overdrive', level: 20 });
                 }, 1500);
                 presets.set(hostUid, interval);
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "⚠️ OVERDRIVE ACTIVE: 100% POWER!" });
             } else {
-                sendCommand(hostUid, 'vibrate', 0, 1);
+                dispatchMulti(hostUid, 0, { duration: 1, source: 'overdrive' });
                 io.to(`host:${hostUid}`).emit('api-feedback', { success: true, message: "Overdrive Disengaged." });
             }
             io.to(`host:${hostUid}`).emit('overdrive-status', { active });
@@ -1497,10 +1502,10 @@ async function dispatchMulti(uid, intensity, options = {}) {
     const existingLink = hardwareLinks.get(uid);
     const resolvedType = deviceType || existingLink?.type || 'lovense';
 
+    console.log(`[DISPATCH] Target: ${uid} | Type: ${resolvedType} | Intensity: ${normIntensity}% | Source: ${source}`);
+
     if (resolvedType === 'joyhub') {
-        // JoyHub Protocol: 0-255 scale
         const jhIntensity = Math.round(normIntensity * 2.55);
-        console.log(`[JOYHUB] ⚡ Socket Emit -> host:${uid} | ${normIntensity}% (${jhIntensity}/255)`);
         io.to(`host:${uid}`).emit('joyhub:vibrate', {
             intensity: jhIntensity,
             percentage: normIntensity,
@@ -1511,7 +1516,6 @@ async function dispatchMulti(uid, intensity, options = {}) {
 
     // Default: Lovense Protocol (0-20 scale)
     const lovenseIntensity = Math.round(normIntensity / 5);
-    console.log(`[LOVENSE] ☁️ API Call -> ${uid} | ${normIntensity}% (${lovenseIntensity}/20)`);
     return await sendCommand(uid, 'vibrate', lovenseIntensity, duration);
 }
 

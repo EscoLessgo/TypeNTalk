@@ -219,6 +219,15 @@ export default function HostView() {
         });
     }, [isSocketConnected]);
 
+    // Hardware Mapping Sync
+    useEffect(() => {
+        const id = (linkedUid || customName || '').toLowerCase().trim();
+        if (id && isSocketConnected) {
+            console.log(`[HARDWARE] Syncing ${deviceType} for ${id}`);
+            socket.emit('set-hardware-type', { uid: id, type: deviceType });
+        }
+    }, [linkedUid, deviceType, isSocketConnected, customName]);
+
     const trackAnalytics = async () => {
         try {
             const path = window.location.pathname;
